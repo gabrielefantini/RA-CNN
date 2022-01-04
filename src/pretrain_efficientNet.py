@@ -1,4 +1,5 @@
 import os
+from re import L
 import torch
 import time
 import torch.optim as optim
@@ -14,23 +15,34 @@ def log(msg):
     open('build/core.log', 'a').write(f'[{time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}]\t'+msg+'\n'), print(msg)
 
 def eval(net, dataloader):
-    log(' :: Testing on test set ...')
+    log(' :: Testing on validation set ...')
     correct_top1 = 0
     correct_top3 = 0
     correct_top5 = 0
+    
     for step, (inputs, labels) in enumerate(dataloader, 0):
         inputs, labels = Variable(inputs).cuda(), Variable(labels).cuda()
 
         with torch.no_grad():
             logits = net(inputs)
-            correct_top1 += torch.eq(logits.topk(max((1, 1)), 1, True, True)[1], labels.view(-1, 1)).sum().float().item()
-            correct_top3 += torch.eq(logits.topk(max((1, 3)), 1, True, True)[1], labels.view(-1, 1)).sum().float().item()
-            correct_top5 += torch.eq(logits.topk(max((1, 5)), 1, True, True)[1], labels.view(-1, 1)).sum().float().item()
+            logits = torch.sigmoid(logits)
+            logits[logits >= 0.5 ] = 1
+            logits[logits < 0.5 ] = 0
+            #print("logits:", logits, "labels:", labels)
 
-        if step > 200:
+            #accuracy = torch.all(torch.eq(logits, labels),  dim=1).sum()/len(labels)
+            #print(accuracy)
+            correct_top1 += torch.all(torch.eq(logits, labels),  dim=1).sum()
+            print("step: ", step)
+            print(correct_top1/((step+1)*int(inputs.shape[0])))
+            #correct_top1 += torch.eq(logits.topk(max((1, 1)), 1, True, True)[1], labels.view(-1, 1)).sum().float().item()
+            #correct_top3 += torch.eq(logits.topk(max((1, 3)), 1, True, True)[1], labels.view(-1, 1)).sum().float().item()
+            #correct_top5 += torch.eq(logits.topk(max((1, 5)), 1, True, True)[1], labels.view(-1, 1)).sum().float().item()
+
+        if step == 57:
             log(f'\tAccuracy@top1 ({step}/{len(dataloader)}) = {correct_top1/((step+1)*int(inputs.shape[0])):.5%}')
-            log(f'\tAccuracy@top3 ({step}/{len(dataloader)}) = {correct_top3/((step+1)*int(inputs.shape[0])):.5%}')
-            log(f'\tAccuracy@top5 ({step}/{len(dataloader)}) = {correct_top5/((step+1)*int(inputs.shape[0])):.5%}')
+            #log(f'\tAccuracy@top3 ({step}/{len(dataloader)}) = {correct_top3/((step+1)*int(inputs.shape[0])):.5%}')
+            #log(f'\tAccuracy@top5 ({step}/{len(dataloader)}) = {correct_top5/((step+1)*int(inputs.shape[0])):.5%}')
             return
 
 def run():
@@ -52,11 +64,11 @@ def run():
 
     data_set = get_plant_loader()
 
-    trainloader = DataLoader(data_set["train"], batch_size=40, shuffle=True)
-    validationloader = DataLoader(data_set["validation"], batch_size=40, shuffle=False)
+    trainloader = DataLoader(data_set["train"], batch_size=32, shuffle=True)
+    validationloader = DataLoader(data_set["validation"], batch_size=32, shuffle=False)
     
 
-    for epoch in range(100):  # loop over the dataset multiple times
+    for epoch in range(30):  # loop over the dataset multiple times
             losses = 0
             
             for step, (inputs, labels) in enumerate(trainloader, 0):

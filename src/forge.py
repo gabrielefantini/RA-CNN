@@ -60,10 +60,13 @@ def test(net, dataloader):
         with torch.no_grad():
             outputs, _, _, _ = net(inputs)
             for idx, logits in enumerate(outputs):
-                correct_summary[f'clsf-{idx}']['top-1'] +=  torch.all(torch.eq(logits[idx], labels),  dim=1).sum()  # top-1
+                logits = torch.sigmoid(logits)
+                logits[logits >= 0.5 ] = 1
+                logits[logits < 0.5 ] = 0
+                correct_summary[f'clsf-{idx}']['top-1'] +=  torch.all(torch.eq(logits, labels),  dim=1).sum()  # top-1
                 #correct_summary[f'clsf-{idx}']['top-5'] += torch.eq(logits.topk(max((1, 5)), 1, True, True)[1], labels.view(-1, 1)).sum().float().item()  # top-5
-
-            if step == 57:
+                print(step)
+            if step == 56:
                 for clsf in correct_summary.keys():
                     _summary = correct_summary[clsf]
                     for topk in _summary.keys():
@@ -93,8 +96,8 @@ def run(pretrained_model):
     sample = random_sample(validationloader)
 
     for epoch in range(50):
-        cls_loss = train(net, trainloader, cls_opt, epoch, 'backbone')
-        rank_loss = train(net, trainloader, apn_opt, epoch, 'apn')
+        #cls_loss = train(net, trainloader, cls_opt, epoch, 'backbone')
+        #rank_loss = train(net, trainloader, apn_opt, epoch, 'apn')
         temp_accuracy = test(net, validationloader)
 
         # visualize cropped inputs
@@ -105,6 +108,7 @@ def run(pretrained_model):
 
         # save model per 10 epoches
         if temp_accuracy > accuracy:
+            accuracy = temp_accuracy
             stamp = f'e{epoch}{int(time.time())}'
             torch.save(net.state_dict, f'build/racnn_efficientNetB0.pt')
             log(f' :: Saved model dict as:\tbuild/racnn_efficientNetB0.pt')

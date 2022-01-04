@@ -43,7 +43,7 @@ def eval(net, dataloader):
             log(f'\tAccuracy@top1 ({step}/{len(dataloader)}) = {correct_top1/((step+1)*int(inputs.shape[0])):.5%}')
             #log(f'\tAccuracy@top3 ({step}/{len(dataloader)}) = {correct_top3/((step+1)*int(inputs.shape[0])):.5%}')
             #log(f'\tAccuracy@top5 ({step}/{len(dataloader)}) = {correct_top5/((step+1)*int(inputs.shape[0])):.5%}')
-            return
+            return correct_top1/((step+1)*int(inputs.shape[0]))
 
 def run():
     state_dict = torchvision.models.efficientnet_b0(pretrained=True).state_dict()
@@ -56,6 +56,7 @@ def run():
     net.load_state_dict(state_dict)
     cudnn.benchmark = True
 
+   
     #for param in net.parameters():
     #    print(type(param), param.size())
 
@@ -68,9 +69,10 @@ def run():
     validationloader = DataLoader(data_set["validation"], batch_size=32, shuffle=False)
     
 
-    for epoch in range(30):  # loop over the dataset multiple times
+    for epoch in range(40):  # loop over the dataset multiple times
             losses = 0
-            
+            accuracy = 0
+
             for step, (inputs, labels) in enumerate(trainloader, 0):
                 inputs, labels = Variable(inputs).cuda(), Variable(labels).cuda()
 
@@ -87,11 +89,13 @@ def run():
                     avg_loss = losses/20
                     log(f':: loss @step({step:2d}/{len(trainloader)})-epoch{epoch}: {loss:.10f}\tavg_loss_20: {avg_loss:.10f}')
                     losses = 0
-            eval(net, validationloader)
-            if epoch % 20 == 0 and epoch != 0:
-                stamp = f'e{epoch}{int(time.time())}'
-                torch.save(net, f'build/efficientNet_b0_ImageNet-{stamp}.pt')
-                torch.save(optimizer.state_dict, f'build/optimizer-{stamp}.pt')
+
+            temp_accuracy = eval(net, validationloader)
+            if temp_accuracy > accuracy :
+                accuracy = temp_accuracy
+                #stamp = f'e{epoch}{int(time.time())}'
+                torch.save(net, f'build/efficientNet_b0_ImageNet.pt')
+                torch.save(optimizer.state_dict, f'build/optimizer.pt')
 
 
 if __name__ == "__main__":

@@ -65,14 +65,13 @@ def get_plant_loader():
     #concat label in binary form with image name
     train_data = pd.concat([df_train, trainx], axis=1).drop('labels', axis=1)
 
-    train, remaining = train_test_split(train_data, train_size=0.8)
-    test, validation = train_test_split(remaining, test_size=0.5)
+    train, validation = train_test_split(train_data, train_size=0.9)
+    #test, validation = train_test_split(remaining, test_size=0.5)
     print(train_data)
 
-    print(len(train),len(test), len(validation))
+    print(len(train), len(validation))
 
     return {
         "train": PlantDataset(train),
-        "test": PlantDataset(test),
         "validation": PlantDataset(validation) 
         }

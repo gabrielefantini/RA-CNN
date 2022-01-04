@@ -181,16 +181,21 @@ class RACNN(nn.Module):
 
     @staticmethod
     def rank_loss(logits, targets, margin=0.05):
-        preds = torch.sigmoid(logits)
-        preds[preds >= 0.5 ] = 1
-        preds[preds < 0.5 ] = 0
-        set_pt = [[scaled_pred[batch_inner_id][target] for scaled_pred in preds] for batch_inner_id, target in enumerate(targets)]
-        loss = 0
-        for batch_inner_id, pts in enumerate(set_pt):
-            loss += (pts[0] - pts[1] + margin).clamp(min=0)
-            loss += (pts[1] - pts[2] + margin).clamp(min=0)
-        return loss
-
+        #as said in the paper
+        preds = [F.softmax(x, dim=-1) for x in logits]
+        losses = []
+        for pred in preds:
+            loss = []
+            for i in range(len(pred)-1):
+                #the loss is the diff between cnn predictions
+                rank_loss = (pred[i]-pred[i+1] + margin).clamp(min = 0)
+                loss.append(rank_loss)
+            loss = torch.sum(torch.stack(loss))
+            losses.append(loss)
+        losses = torch.stack(losses)
+        losses = torch.sum(losses)
+        return losses
+    
     def __echo_backbone(self, inputs, targets, optimizer):
         inputs, targets = Variable(inputs).cuda(), Variable(targets).cuda()
         logits, _, _, _ = self.forward(inputs)

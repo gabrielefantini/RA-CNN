@@ -93,7 +93,7 @@ def run(pretrained_model):
     sample = random_sample(validationloader)
 
     for epoch in range(50):
-        cls_loss = train(net, trainloader, cls_opt, epoch, 'backbone')
+        #cls_loss = train(net, trainloader, cls_opt, epoch, 'backbone')
         rank_loss = train(net, trainloader, apn_opt, epoch, 'apn')
         temp_accuracy = test(net, validationloader)
 

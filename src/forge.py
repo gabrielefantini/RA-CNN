@@ -108,7 +108,7 @@ def run(pretrained_model):
         if temp_accuracy > accuracy:
             accuracy = temp_accuracy
             stamp = f'e{epoch}{int(time.time())}'
-            torch.save(net.state_dict, f'build/racnn_efficientNetB0.pt')
+            torch.save(net.state_dict(), f'build/racnn_efficientNetB0.pt')
             log(f' :: Saved model dict as:\tbuild/racnn_efficientNetB0.pt')
             torch.save(cls_opt.state_dict(), f'build/cls_optimizer.pt')
             torch.save(apn_opt.state_dict(), f'build/apn_optimizer.pt')

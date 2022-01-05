@@ -267,10 +267,10 @@ class RACNN(nn.Module):
             self.eval()
 
 
-if __name__ == "__main__":
-    net = RACNN(num_classes=6).cuda()
-    net.mode('pretrain_apn')
-    optimizer = torch.optim.SGD(list(net.apn1.parameters()) + list(net.apn2.parameters()), lr=0.001, momentum=0.9)
-    for i in range(50):
-        inputs = torch.rand(2, 3, 448, 448)
-        print(f':: loss @step{i} : {net.echo(inputs, optimizer)}')
+#if __name__ == "__main__":
+#    net = RACNN(num_classes=6).cuda()
+#    net.mode('pretrain_apn')
+#    optimizer = torch.optim.SGD(list(net.apn1.parameters()) + list(net.apn2.parameters()), lr=0.001, momentum=0.9)
+#    for i in range(50):
+#        inputs = torch.rand(2, 3, 448, 448)
+#        print(f':: loss @step{i} : {net.echo(inputs, optimizer)}')

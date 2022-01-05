@@ -14,7 +14,7 @@ from torch.autograd import Variable
 sys.path.append('.')  # noqa: E402
 from model import RACNN
 from plant_loader import get_plant_loader
-from pretrain_apn import random_sample, log, clean
+from pretrain_apn import random_sample, log, clean, save_img, build_gif
 
 
 
@@ -39,18 +39,16 @@ def train(net, dataloader, optimizer, epoch, _type):
 
 def test(net, dataloader):
     log(' :: Testing on test set ...')
+    acc = 0
     correct_summary = {
         'clsf-0': {
             'top-1': 0,
-            'top-5': 0
             },
         'clsf-1': {
             'top-1': 0,
-            'top-5': 0
         },
         'clsf-2': {
             'top-1': 0,
-            'top-5': 0
             }
         }
 
@@ -65,13 +63,13 @@ def test(net, dataloader):
                 logits[logits < 0.5 ] = 0
                 correct_summary[f'clsf-{idx}']['top-1'] +=  torch.all(torch.eq(logits, labels),  dim=1).sum()  # top-1
                 #correct_summary[f'clsf-{idx}']['top-5'] += torch.eq(logits.topk(max((1, 5)), 1, True, True)[1], labels.view(-1, 1)).sum().float().item()  # top-5
-                print(step)
-            if step == 56:
+            if step == 57:
                 for clsf in correct_summary.keys():
                     _summary = correct_summary[clsf]
                     for topk in _summary.keys():
                         log(f'\tAccuracy {clsf}@{topk} ({step}/{len(dataloader)}) = {_summary[topk]/((step+1)*int(inputs.shape[0])):.5%}')
-                return _summary[topk]/((step+1)*int(inputs.shape[0]))
+                        acc +=_summary[topk]/((step+1)*int(inputs.shape[0]))
+    return acc/3
 
 
 def run(pretrained_model):
@@ -101,10 +99,10 @@ def run(pretrained_model):
         temp_accuracy = test(net, validationloader)
 
         # visualize cropped inputs
-        #_, _, _, resized = net(sample.unsqueeze(0))
-        #x1, x2 = resized[0].data, resized[1].data
-        #save_img(x1, path=f'build/.cache/epoch_{epoch}@2x.jpg', annotation=f'cls_loss = {cls_loss:.7f}, rank_loss = {rank_loss:.7f}')
-        #save_img(x2, path=f'build/.cache/epoch_{epoch}@4x.jpg', annotation=f'cls_loss = {cls_loss:.7f}, rank_loss = {rank_loss:.7f}')
+        _, _, _, resized = net(sample.unsqueeze(0))
+        x1, x2 = resized[0].data, resized[1].data
+        save_img(x1, path=f'build/.cache/epoch_{epoch}@2x.jpg', annotation=f'cls_loss = {cls_loss:.7f}, rank_loss = {rank_loss:.7f}')
+        save_img(x2, path=f'build/.cache/epoch_{epoch}@4x.jpg', annotation=f'cls_loss = {cls_loss:.7f}, rank_loss = {rank_loss:.7f}')
 
         # save model per 10 epoches
         if temp_accuracy > accuracy:
@@ -121,5 +119,5 @@ if __name__ == "__main__":
     os.environ["CUDA_VISIBLE_DEVICES"] = "0"
     #RACNN con backbone e apn pre addestrate
     run(pretrained_model='build/racnn_pretrained.pt')
-    #build_gif(pattern='@2x', gif_name='racnn_cub200')
-    #build_gif(pattern='@4x', gif_name='racnn_cub200')
+    build_gif(pattern='@2x', gif_name='racnn_efficientNet')
+    build_gif(pattern='@4x', gif_name='racnn_efficientNet')

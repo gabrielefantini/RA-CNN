@@ -1,4 +1,4 @@
-
+import numpy as np
 from torch.utils.data import Dataset, DataLoader
 import cv2
 import torchvision.transforms as transforms
@@ -41,6 +41,26 @@ class PlantDataset(Dataset):
 
             return image, label
 
+        @staticmethod
+        def tensor_to_img(x, imtype=np.uint8):
+            mean = [109.97 / 255., 127.34 / 255., 123.88 / 255.]
+            std = [1. / 255., 1. / 255., 1. / 255.]
+
+            if not isinstance(x, np.ndarray):
+                if isinstance(x, torch.Tensor):  # get the data from a variable
+                    image_tensor = x.data
+                else:
+                    return x
+                image_numpy = image_tensor.cpu().float().numpy()  # convert it into a numpy array
+                if image_numpy.shape[0] == 1:  # grayscale to RGB
+                    image_numpy = np.tile(image_numpy, (3, 1, 1))
+                for i in range(len(mean)):
+                    image_numpy[i] = image_numpy[i] * std[i] + mean[i]
+                image_numpy = image_numpy * 255
+                image_numpy = np.transpose(image_numpy, (1, 2, 0))  # post-processing: tranpose and scaling
+            else:  # if it is a numpy array, do nothing
+                image_numpy = x
+            return image_numpy.astype(imtype)
 
 def get_plant_loader():
 

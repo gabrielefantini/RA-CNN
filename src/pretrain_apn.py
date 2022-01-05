@@ -9,11 +9,11 @@ import time
 import torch.optim as optim
 import torch.backends.cudnn as cudnn
 import torch.nn.functional as F
-
+import matplotlib.pyplot as plt
 
 sys.path.append('.')  # noqa: E402
 from model import RACNN
-from plant_loader import get_plant_loader
+from plant_loader import PlantDataset, get_plant_loader
 from torch.autograd import Variable
 
 
@@ -27,12 +27,12 @@ def random_sample(dataloader):
         return inputs[0].cuda()
 
 
-#def save_img(x, path, annotation=''):
-#    fig = plt.gcf()  # generate outputs
-#    plt.imshow(CUB200_loader.tensor_to_img(x[0]), aspect='equal'), plt.axis('off'), fig.set_size_inches(448/100.0/3.0, 448/100.0/3.0)
-#    plt.gca().xaxis.set_major_locator(plt.NullLocator()), plt.gca().yaxis.set_major_locator(plt.NullLocator()), plt.subplots_adjust(top=1, bottom=0, left=0, right=1, hspace=0, wspace=0), plt.margins(0, 0)
-#    plt.text(0, 0, annotation, color='white', size=4, ha="left", va="top", bbox=dict(boxstyle="square", ec='black', fc='black'))
-#    plt.savefig(path, dpi=300, pad_inches=0)    # visualize masked image
+def save_img(x, path, annotation=''):
+    fig = plt.gcf()  # generate outputs
+    plt.imshow(PlantDataset.tensor_to_img(x[0]), aspect='equal'), plt.axis('off'), fig.set_size_inches(224/100.0/3.0, 224/100.0/3.0)
+    plt.gca().xaxis.set_major_locator(plt.NullLocator()), plt.gca().yaxis.set_major_locator(plt.NullLocator()), plt.subplots_adjust(top=1, bottom=0, left=0, right=1, hspace=0, wspace=0), plt.margins(0, 0)
+    plt.text(0, 0, annotation, color='white', size=4, ha="left", va="top", bbox=dict(boxstyle="square", ec='black', fc='black'))
+    plt.savefig(path, dpi=300, pad_inches=0)    # visualize masked image
 
 
 def run(pretrained_backbone=None):
@@ -77,12 +77,12 @@ def run(pretrained_backbone=None):
                 return
 
 
-#def build_gif(pattern='@2x', gif_name='pretrain_apn_cub200', cache_path='build/.cache'):
+def build_gif(pattern='@2x', gif_name='pretrain_apn_EfficientNet', cache_path='build/.cache'):
     # generate a gif, enjoy XD
-#    files = [x for x in os.listdir(cache_path) if pattern in x]
-#    files.sort(key=lambda x: int(x.split('@')[0].split('_')[-1]))
-#    gif_images = [imageio.imread(f'{cache_path}/{img_file}') for img_file in files]
-#    imageio.mimsave(f"build/{gif_name}{pattern}-{int(time.time())}.gif", gif_images, fps=8)
+    files = [x for x in os.listdir(cache_path) if pattern in x]
+    files.sort(key=lambda x: int(x.split('@')[0].split('_')[-1]))
+    gif_images = [imageio.imread(f'{cache_path}/{img_file}') for img_file in files]
+    imageio.mimsave(f"build/{gif_name}{pattern}-{int(time.time())}.gif", gif_images, fps=8)
 
 
 def clean(path='build/.cache/'):

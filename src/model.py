@@ -8,34 +8,73 @@ import torchvision
 class AttentionCropFunction(torch.autograd.Function):
     @staticmethod
     def forward(self, images, locs):
+        
         def h(_x): return 1 / (1 + torch.exp(-10 * _x.float()))
+
+        #in_size = 224
         in_size = images.size()[2]
+        #unit = tensor([[  0,   1,   2,  ..., 221, 222, 223],
+        #               [  0,   1,   2,  ..., 221, 222, 223],
+        #               [  0,   1,   2,  ..., 221, 222, 223],
+        #               ...,
+        #               [  0,   1,   2,  ..., 221, 222, 223],
+        #               [  0,   1,   2,  ..., 221, 222, 223],
+        #               [  0,   1,   2,  ..., 221, 222, 223]])
         unit = torch.stack([torch.arange(0, in_size)] * in_size)
+        #x è 3 tensor([[[  0,   0,   0,  ...,   0,   0,   0],
+        #               [  1,   1,   1,  ...,   1,   1,   1],
+        #               [  2,   2,   2,  ...,   2,   2,   2],
+        #               ...,
+        #               [221, 221, 221,  ..., 221, 221, 221],
+        #               [222, 222, 222,  ..., 222, 222, 222],
+        #               [223, 223, 223,  ..., 223, 223, 223]]
         x = torch.stack([unit.t()] * 3)
+        #y è 3 tensori unit
         y = torch.stack([unit] * 3)
         if isinstance(images, torch.cuda.FloatTensor):
             x, y = x.cuda(), y.cuda()
 
         in_size = images.size()[2]
         ret = []
+
+        #processa tutte le immagini del batch, in questo caso images.size(0) è 12
         for i in range(images.size(0)):
+            # locs sono tensor([[143.3381, 124.7122,  51.1188],
+            #                   [110.5597, 137.9310,  60.7936],
+            #                   [119.1002,  99.9731,  52.5289],
+            #                   [113.5314, 129.4575,  46.4848],
+            #                   [ 79.8117,  94.2794,  54.7804],
+            #                   [117.5080, 136.6172,  63.8196],
+            #                   [ 87.7556, 113.1122,  62.1823],
+            #                   [131.8735, 108.5016,  63.9460],
+            #                   [ 99.1213, 125.6766,  76.2739],
+            #                   [ 90.7646,  89.5686,  49.1010],
+            #                   [ 84.4682, 130.7239,  82.1634],
+            #                   [ 88.4385,  96.4715,  42.9040]], device='cuda:0',
+            #               grad_fn=<MulBackward0>)
+
             tx, ty, tl = locs[i][0], locs[i][1], locs[i][2]
+            
+            #per evitare che si rimpicciolisca troppo
             tl = tl if tl > (in_size/3) else in_size/3
+            #check per evitare che il crop "sbordi"
             tx = tx if tx > tl else tl
             tx = tx if tx < in_size-tl else in_size-tl
             ty = ty if ty > tl else tl
             ty = ty if ty < in_size-tl else in_size-tl
-
+            
+            # in un esempio, w_off, h_off, w_end, h_end 68 50 218 199
             w_off = int(tx-tl) if (tx-tl) > 0 else 0
             h_off = int(ty-tl) if (ty-tl) > 0 else 0
             w_end = int(tx+tl) if (tx+tl) < in_size else in_size
             h_end = int(ty+tl) if (ty+tl) < in_size else in_size
-
+            
+            #mk cosa fa di preciso?????
             mk = (h(x-w_off) - h(x-w_end)) * (h(y-h_off) - h(y-h_end))
             xatt = images[i] * mk
-
             xatt_cropped = xatt[:, w_off: w_end, h_off: h_end]
             before_upsample = Variable(xatt_cropped.unsqueeze(0))
+            #fa l'upsampling dell'immagine croppata a 224x224
             xamp = F.upsample(before_upsample, size=(224, 224), mode='bilinear', align_corners=True)
             ret.append(xamp.data.squeeze())
 
@@ -121,8 +160,8 @@ class RACNN(nn.Module):
         #batch_size = x.shape[0]
         rescale_tl = torch.tensor([1, 1, 0.5], requires_grad=False).cuda()
         # forward @scale-1
-        feature_s1 = self.b1.features[:-1](x)  # torch.Size([1, 320, 14, 14])
-        pool_s1 = self.feature_pool(feature_s1)
+        feature_s1 = self.b1.features[:-1](x)  # torch.Size([batch_size, 320, 7, 7])
+        pool_s1 = self.feature_pool(feature_s1) # torch.Size([batch_size, 320, 1, 1])
         _attention_s1 = self.apn1(feature_s1.view(-1, 320 * 7 * 7))
         attention_s1 = _attention_s1*rescale_tl
         resized_s1 = self.crop_resize(x, attention_s1 * x.shape[-1])
@@ -182,7 +221,7 @@ class RACNN(nn.Module):
     @staticmethod
     def rank_loss(logits, targets, margin=0.05):
         #as said in the paper
-        preds = [F.softmax(x, dim=-1) for x in logits]
+        preds = [F.softmax(x, dim=-1) for x in logits] # preds length equal to 3
         losses = []
         for pred in preds:
             loss = []

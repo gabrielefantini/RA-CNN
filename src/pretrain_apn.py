@@ -96,5 +96,5 @@ if __name__ == "__main__":
     os.environ["CUDA_VISIBLE_DEVICES"] = "0"
     clean()
     run(pretrained_backbone='build/efficientNet_b0_ImageNet.pt')
-    #build_gif(pattern='@2x', gif_name='pretrain_apn_cub200')
-    #build_gif(pattern='@4x', gif_name='pretrain_apn_cub200')
+    #build_gif(pattern='@2x', gif_name='pretrain_apn_EfficientNet')
+    #build_gif(pattern='@4x', gif_name='pretrain_apn_EfficientNet')

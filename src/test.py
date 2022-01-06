@@ -18,12 +18,10 @@ from pretrain_apn import log, clean, save_img, build_gif
 
 def random_sample(dataloader):
     for batch_idx, (inputs, labels) in enumerate(dataloader, 1):
-        return [inputs[4].cuda(), labels[0].cuda()]
+        return [inputs[17].cuda(), labels[17].cuda()]
 
-def run(pretrained_model):
-    accuracy = 0
+def runOnSingleImage(pretrained_model):
     labels = ["complex", "frog_eye_leaf_spot", "healthy", "powdery_mildew", "rust", "scab"]
-
 
     net = RACNN(num_classes=6).cuda()
     net.load_state_dict(torch.load(pretrained_model))
@@ -34,6 +32,9 @@ def run(pretrained_model):
     sample = random_sample(validationloader)
     preds, _, _, resized = net(sample[0].unsqueeze(0))
     
+    print(preds)
+    print(sample[1])
+
     for id, pred in enumerate(preds, 0):
         preds[id] = torch.sigmoid(preds[id])
         preds[id][preds[id] >= 0.5 ] = 1
@@ -56,9 +57,51 @@ def run(pretrained_model):
                 print(labels[id])
         print("================================")        
 
+def run(pretrained_model):
+    accuracy = 0
+    net = RACNN(num_classes=6).cuda()
+    net.load_state_dict(torch.load(pretrained_model))
+
+    data_set = get_plant_loader()
+    validationloader = torch.utils.data.DataLoader(data_set["validation"], batch_size=32, shuffle=False)
+
+    
+    correct_summary = {
+        'clsf-0': {
+            'top-1': 0,
+            },
+        'clsf-1': {
+            'top-1': 0,
+        },
+        'clsf-2': {
+            'top-1': 0,
+            }
+        }
+
+    inputsNumber = 0
+    for step, (inputs, labels) in enumerate(validationloader, 0):
+        inputs, labels = Variable(inputs).cuda(), Variable(labels).cuda()
+
+        inputsNumber += inputs.size(0)    
+        
+        with torch.no_grad():
+            outputs, _, _, _ = net(inputs)
+            #gli output di ogni livello
+            for idx, logits in enumerate(outputs):
+                logits = torch.sigmoid(logits)
+                logits[logits >= 0.5 ] = 1
+                logits[logits < 0.5 ] = 0
+                correct_summary[f'clsf-{idx}']['top-1'] +=  torch.all(torch.eq(logits, labels),  dim=1).sum()  # top-1
+                
+    for clsf in correct_summary.keys():
+        _summary = correct_summary[clsf]
+        for topk in _summary.keys():
+            print(f'\tAccuracy {clsf}@{topk} {_summary[topk]/inputsNumber:.5%}')
+            accuracy +=_summary[topk]/inputsNumber
+
+    print(accuracy/3)
 
 if __name__ == "__main__":
     os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-    run('build/racnn_efficientNetB0.pt')
-    #build_gif(pattern='@2x', gif_name='racnn_efficientNet')
-    #build_gif(pattern='@4x', gif_name='racnn_efficientNet')
+    #runOnSingleImage('build/racnn_efficientNetB0.pt')
+    run('build/racnn_efficientNetB0_version0.pt')

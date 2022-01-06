@@ -18,8 +18,7 @@ class PlantDataset(Dataset):
             self.image_dir = image_dir
             self.transform = transforms.Compose([
                 transforms.ToPILImage(),
-                transforms.Resize(224),
-                transforms.CenterCrop(224),
+                transforms.Resize((224,224)),
                 transforms.ToTensor(),
                 transforms.Normalize(
                     mean=means,

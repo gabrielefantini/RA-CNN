@@ -65,12 +65,12 @@ def run(pretrained_backbone=None):
             avg_loss = avg(losses[-5 if len(losses) > 5 else -len(losses):])
             print(f':: loss @step{step:2d}: {loss}\tavg_loss_5: {avg_loss}')
 
-            #if step % 2 == 0 or step < 5:  # check point
-            #    _, _, _, resized = net(sample.unsqueeze(0))
-            #    x1, x2 = resized[0].data, resized[1].data
+            if step % 2 == 0 or step < 5:  # check point
+                _, _, _, resized = net(sample.unsqueeze(0))
+                x1, x2 = resized[0].data, resized[1].data
                 # visualize cropped inputs
-            #   save_img(x1, path=f'build/.cache/step_{step}@2x.jpg', annotation=f'loss = {avg_loss:.7f}, step = {step}')
-            #   save_img(x2, path=f'build/.cache/step_{step}@4x.jpg', annotation=f'loss = {avg_loss:.7f}, step = {step}')
+                save_img(x1, path=f'build/.cache/step_{step}@2x.jpg', annotation=f'loss = {avg_loss:.7f}, step = {step}')
+                save_img(x2, path=f'build/.cache/step_{step}@4x.jpg', annotation=f'loss = {avg_loss:.7f}, step = {step}')
             print(step)
             if step >= 128:  # 128 steps is enough for pretraining
                 torch.save(net.state_dict(), f'build/racnn_pretrained.pt')
@@ -96,5 +96,5 @@ if __name__ == "__main__":
     os.environ["CUDA_VISIBLE_DEVICES"] = "0"
     clean()
     run(pretrained_backbone='build/efficientNet_b0_ImageNet.pt')
-    #build_gif(pattern='@2x', gif_name='pretrain_apn_EfficientNet')
-    #build_gif(pattern='@4x', gif_name='pretrain_apn_EfficientNet')
+    build_gif(pattern='@2x', gif_name='pretrain_apn_EfficientNet')
+    build_gif(pattern='@4x', gif_name='pretrain_apn_EfficientNet')

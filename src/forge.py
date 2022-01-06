@@ -119,5 +119,5 @@ if __name__ == "__main__":
     os.environ["CUDA_VISIBLE_DEVICES"] = "0"
     #RACNN con backbone e apn pre addestrate
     run(pretrained_model='build/racnn_pretrained.pt')
-    #build_gif(pattern='@2x', gif_name='racnn_efficientNet')
-    #build_gif(pattern='@4x', gif_name='racnn_efficientNet')
+    build_gif(pattern='@2x', gif_name='racnn_efficientNet')
+    build_gif(pattern='@4x', gif_name='racnn_efficientNet')

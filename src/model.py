@@ -213,6 +213,7 @@ class RACNN(nn.Module):
     def multitask_loss(logits, targets):
         loss = []
         criterion = torch.nn.BCEWithLogitsLoss()
+        criterion = criterion
         for i in range(len(logits)):
             loss.append(criterion(logits[i], targets))
         loss = torch.sum(torch.stack(loss))
@@ -221,13 +222,17 @@ class RACNN(nn.Module):
     @staticmethod
     def rank_loss(logits, targets, margin=0.05):
         #as said in the paper
-        preds = [F.softmax(x, dim=-1) for x in logits] # preds length equal to 3
+        preds = [torch.sigmoid(x) for x in logits] # preds length equal to 3
         losses = []
+        criterion = torch.nn.MarginRankingLoss(margin=0.05)
+        criterion = criterion
         for pred in preds:
             loss = []
             for i in range(len(pred)-1):
                 #the loss is the diff between cnn predictions
-                rank_loss = (pred[i]-pred[i+1] + margin).clamp(min = 0)
+                #rank_loss = (pred[i]-pred[i+1] + margin).clamp(min = 0)
+                y = Variable(torch.Tensor(pred[0].size(0)).fill_(-1)).cuda()
+                rank_loss = criterion(pred[i], pred[i+1], y)
                 loss.append(rank_loss)
             loss = torch.sum(torch.stack(loss))
             losses.append(loss)

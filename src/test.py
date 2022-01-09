@@ -18,14 +18,13 @@ from pretrain_apn import log, clean, save_img, build_gif
 
 def random_sample(dataloader):
     for batch_idx, (inputs, labels) in enumerate(dataloader, 1):
-        return [inputs[0].cuda(), labels[0].cuda()]
+        return [inputs[17].cuda(), labels[17].cuda()]
 
 def runOnSingleImage(pretrained_model):
     labels = ["complex", "frog_eye_leaf_spot", "healthy", "powdery_mildew", "rust", "scab"]
 
     net = RACNN(num_classes=6).cuda()
     net.load_state_dict(torch.load(pretrained_model))
-
     data_set = get_plant_loader()
     validationloader = torch.utils.data.DataLoader(data_set["validation"], batch_size=32, shuffle=False)
     
@@ -61,7 +60,7 @@ def run(pretrained_model):
     accuracy = 0
     net = RACNN(num_classes=6).cuda()
     net.load_state_dict(torch.load(pretrained_model))
-
+    net.eval()
     data_set = get_plant_loader()
     validationloader = torch.utils.data.DataLoader(data_set["validation"], batch_size=32, shuffle=False)
 
@@ -103,5 +102,5 @@ def run(pretrained_model):
 
 if __name__ == "__main__":
     os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-    runOnSingleImage('build/racnn_pretrained.pt')
-    #run('build/racnn_efficientNetB0_version0.pt')
+    #runOnSingleImage('build/racnn_efficientNetB0.pt')
+    run('build/racnn_efficientNetB0.pt')

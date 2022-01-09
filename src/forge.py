@@ -82,20 +82,23 @@ def run(pretrained_model):
     #ognuna delle 3 cnn del modello parte con i valori della cnn pre addestrata e poi ognuna si specializza
     #con i propri parametri
     cls_params = list(net.b1.parameters()) + list(net.b2.parameters()) + list(net.b3.parameters()) + \
-        list(net.classifier1.parameters()) + list(net.classifier2.parameters()) + list(net.classifier3.parameters())
+        list(net.classifier1.parameters()) + list(net.classifier2.parameters()) + list(net.classifier3.parameters()) #addestro sia le cnn che i classificatori
     apn_params = list(net.apn1.parameters()) + list(net.apn2.parameters())
 
     cls_opt = optim.SGD(cls_params, lr=0.001, momentum=0.9)
+    #TODO da modificare in lr=1e-6
     apn_opt = optim.SGD(apn_params, lr=0.001, momentum=0.9)
 
     data_set = get_plant_loader()
-    trainloader = torch.utils.data.DataLoader(data_set["train"], batch_size=12, shuffle=True)
-    validationloader = torch.utils.data.DataLoader(data_set["validation"], batch_size=32, shuffle=False)
+    trainloader = torch.utils.data.DataLoader(data_set["train"], batch_size=16, shuffle=True)
+    validationloader = torch.utils.data.DataLoader(data_set["validation"], batch_size=16, shuffle=False)
     sample = random_sample(validationloader)
 
     for epoch in range(50):
+        net.train()
         cls_loss = train(net, trainloader, cls_opt, epoch, 'backbone')
         rank_loss = train(net, trainloader, apn_opt, epoch, 'apn')
+        net.eval()
         temp_accuracy = test(net, validationloader)
 
         # visualize cropped inputs

@@ -65,11 +65,11 @@ def run():
 
     data_set = get_plant_loader()
 
-    trainloader = DataLoader(data_set["train"], batch_size=32, shuffle=True)
+    trainloader = DataLoader(data_set["train"], batch_size=32, shuffle=True, num_workers=4)
     validationloader = DataLoader(data_set["validation"], batch_size=32, shuffle=False)
     
 
-    for epoch in range(40):  # loop over the dataset multiple times
+    for epoch in range(15):  # loop over the dataset multiple times
             losses = 0
             accuracy = 0
 

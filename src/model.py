@@ -124,7 +124,7 @@ class AttentionCropLayer(nn.Module):
 
 
 class RACNN(nn.Module):
-    def __init__(self, num_classes, img_scale=448):
+    def __init__(self, num_classes):
         super(RACNN, self).__init__()
 
         self.b1 = torchvision.models.efficientnet_b0(num_classes=num_classes)
@@ -141,17 +141,19 @@ class RACNN(nn.Module):
 
         #l'output delle due apn sono 3 valori, che indicano x,y,l
         self.apn1 = nn.Sequential(
-            nn.Linear(320 * 7 * 7, 1024),
+            nn.Linear(320 * 7 * 7, 4096),
+            nn.ReLU(),
+            nn.Dropout(0.5),
+            nn.Linear(4096, 3),
             nn.Tanh(),
-            nn.Linear(1024, 3),
-            nn.Sigmoid(),
         )
 
         self.apn2 = nn.Sequential(
-            nn.Linear(320 * 7 * 7, 1024),
+            nn.Linear(320 * 7 * 7, 4096),
+            nn.ReLU(),
+            nn.Dropout(0.5),
+            nn.Linear(4096, 3),
             nn.Tanh(),
-            nn.Linear(1024, 3),
-            nn.Sigmoid(),
         )
         
         self.echo = None
@@ -182,7 +184,7 @@ class RACNN(nn.Module):
     def __get_weak_loc(self, features):
         ret = []   # search regions with the highest response value in conv5
         for i in range(len(features)):
-            resize = 224 if i >= 1 else 448
+            resize = 224 if i >= 1 else 224
             response_map_batch = F.interpolate(features[i], size=[resize, resize], mode="bilinear").mean(1)  # mean alone channels
             ret_batch = []
             for response_map in response_map_batch:

@@ -37,9 +37,11 @@ def train(net, dataloader, optimizer, epoch, _type):
     return avg_loss
 
 
-def test(net, dataloader):
-    log(' :: Testing on test set ...')
-    acc = 0
+def test(net, dataloader, type):
+    log(f' :: Testing on {type} set ...')
+    accuracy = 0
+    inputsNumber = 0
+
     correct_summary = {
         'clsf-0': {
             'top-1': 0,
@@ -55,6 +57,8 @@ def test(net, dataloader):
     for step, (inputs, labels) in enumerate(dataloader, 0):
         inputs, labels = Variable(inputs).cuda(), Variable(labels).cuda()
 
+        inputsNumber += inputs.size(0)
+
         with torch.no_grad():
             outputs, _, _, _ = net(inputs)
             for idx, logits in enumerate(outputs):
@@ -63,15 +67,18 @@ def test(net, dataloader):
                 logits[logits < 0.5 ] = 0
                 correct_summary[f'clsf-{idx}']['top-1'] +=  torch.all(torch.eq(logits, labels),  dim=1).sum()  # top-1
                 #correct_summary[f'clsf-{idx}']['top-5'] += torch.eq(logits.topk(max((1, 5)), 1, True, True)[1], labels.view(-1, 1)).sum().float().item()  # top-5
-            if step == 57:
-                for clsf in correct_summary.keys():
-                    _summary = correct_summary[clsf]
-                    for topk in _summary.keys():
-                        log(f'\tAccuracy {clsf}@{topk} ({step}/{len(dataloader)}) = {_summary[topk]/((step+1)*int(inputs.shape[0])):.5%}')
-                        acc +=_summary[topk]/((step+1)*int(inputs.shape[0]))
-    return acc/3
+            for clsf in correct_summary.keys():
+                _summary = correct_summary[clsf]
+                for topk in _summary.keys():
+                    
+                    if step == 100:
+                        print(f'\tAccuracy {clsf}@{topk} {_summary[topk]/inputsNumber:.5%}')
+                    
+                    accuracy +=_summary[topk]/inputsNumber
+    
+    return accuracy/3
 
-
+#impostazioni attuali --> 20 minuti ad epoch --> 16h per fare tutto l'addestramento
 def run(pretrained_model):
     accuracy = 0
     log(f' :: Start training with {pretrained_model}')
@@ -87,11 +94,11 @@ def run(pretrained_model):
 
     cls_opt = optim.SGD(cls_params, lr=0.001, momentum=0.9)
     #TODO da modificare in lr=1e-6
-    apn_opt = optim.SGD(apn_params, lr=0.001, momentum=0.9)
+    apn_opt = optim.SGD(apn_params, lr=1e-6, momentum=0.9)
 
     data_set = get_plant_loader()
-    trainloader = torch.utils.data.DataLoader(data_set["train"], batch_size=16, shuffle=True)
-    validationloader = torch.utils.data.DataLoader(data_set["validation"], batch_size=16, shuffle=False)
+    trainloader = torch.utils.data.DataLoader(data_set["train"], batch_size=10, shuffle=True, num_workers=4)
+    validationloader = torch.utils.data.DataLoader(data_set["validation"], batch_size=10, shuffle=False)
     sample = random_sample(validationloader)
 
     for epoch in range(50):
@@ -99,15 +106,19 @@ def run(pretrained_model):
         cls_loss = train(net, trainloader, cls_opt, epoch, 'backbone')
         rank_loss = train(net, trainloader, apn_opt, epoch, 'apn')
         net.eval()
-        temp_accuracy = test(net, validationloader)
+        temp_accuracy = test(net, validationloader, 'validation')
+        train_accuracy = test(net, trainloader, 'train')
 
+        print(f'avg Validation accuracy: {temp_accuracy}')
+        print(f'avg train accuracy: {train_accuracy}')
+        
         # visualize cropped inputs
         _, _, _, resized = net(sample.unsqueeze(0))
         x1, x2 = resized[0].data, resized[1].data
         save_img(x1, path=f'build/.cache/epoch_{epoch}@2x.jpg', annotation=f'cls_loss = {cls_loss:.7f}, rank_loss = {rank_loss:.7f}')
         save_img(x2, path=f'build/.cache/epoch_{epoch}@4x.jpg', annotation=f'cls_loss = {cls_loss:.7f}, rank_loss = {rank_loss:.7f}')
 
-        # save model per 10 epoches
+
         if temp_accuracy > accuracy:
             accuracy = temp_accuracy
             stamp = f'e{epoch}{int(time.time())}'
@@ -122,5 +133,5 @@ if __name__ == "__main__":
     os.environ["CUDA_VISIBLE_DEVICES"] = "0"
     #RACNN con backbone e apn pre addestrate
     run(pretrained_model='build/racnn_pretrained.pt')
-    build_gif(pattern='@2x', gif_name='racnn_efficientNet')
-    build_gif(pattern='@4x', gif_name='racnn_efficientNet')
+    build_gif(pattern='@2x', gif_name='racnn_efficientNet_LRe')
+    build_gif(pattern='@4x', gif_name='racnn_efficientNet_LRe')

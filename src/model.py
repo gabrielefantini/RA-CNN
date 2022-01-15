@@ -223,7 +223,7 @@ class RACNN(nn.Module):
 
     @staticmethod
     def rank_loss(logits, targets, margin=0.05):
-        #as said in the paper
+        #In the paper said softmax? But innapropriate for multiLabel classification, changed to sigmoid
         preds = [torch.sigmoid(x) for x in logits] # preds length equal to 3
         losses = []
         criterion = torch.nn.MarginRankingLoss(margin=0.05)
@@ -250,6 +250,7 @@ class RACNN(nn.Module):
         loss = self.multitask_loss(logits, targets)
         loss.backward()
         optimizer.step()
+        #nb returning loss.item() is important to not saturate gpu memory!!!
         return loss.item()
 
     def __echo_apn(self, inputs, targets, optimizer):

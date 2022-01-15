@@ -18,7 +18,7 @@ from pretrain_apn import log, clean, save_img, build_gif
 
 def random_sample(dataloader):
     for batch_idx, (inputs, labels) in enumerate(dataloader, 1):
-        return [inputs[17].cuda(), labels[17].cuda()]
+        return [inputs[19].cuda(), labels[19].cuda()]
 
 def runOnSingleImage(pretrained_model):
     labels = ["complex", "frog_eye_leaf_spot", "healthy", "powdery_mildew", "rust", "scab"]
@@ -102,5 +102,5 @@ def run(pretrained_model):
 
 if __name__ == "__main__":
     os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-    #runOnSingleImage('build/racnn_efficientNetB0.pt')
-    run('build/racnn_efficientNetB0.pt')
+    runOnSingleImage('build/racnn_efficientNetB0.pt')
+    #run('build/racnn_efficientNetB0.pt')

@@ -49,7 +49,7 @@ def run(pretrained_backbone=None):
     optimizer = optim.SGD(params, lr=0.001, momentum=0.9)
 
     data_set = get_plant_loader()
-    trainloader = torch.utils.data.DataLoader(data_set["train"], batch_size=4, shuffle=True)
+    trainloader = torch.utils.data.DataLoader(data_set["train"], batch_size=8, shuffle=True, num_workers=4)
     validationloader = torch.utils.data.DataLoader(data_set["validation"], batch_size=8, shuffle=False)
     sample = random_sample(validationloader)
     

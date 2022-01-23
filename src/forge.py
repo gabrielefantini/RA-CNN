@@ -55,8 +55,8 @@ def test(net, dataloader):
                                           labels),  dim=1).sum()
                 # correct_summary[f'clsf-{idx}']['top-5'] += torch.eq(logits.topk(max((1, 5)), 1, True, True)[1], labels.view(-1, 1)).sum().float().item()  # top-5
     for id, value in enumerate(correct):
-        correct[id] = value/cnt
-        avg_accuracy += correct[id]
+        correct[id] = (value/cnt).detach().cpu()
+        avg_accuracy += (correct[id]).detach().cpu()
 
     return avg_accuracy/3, correct
 
@@ -87,8 +87,7 @@ def run(pretrained_model):
     sample = random_sample(validationloader)
 
     # 15
-    for epoch in range(20):
-
+    for epoch in range(40):
         cls_loss = train(net, trainloader, cls_opt, epoch, 'backbone')
         rank_loss = train(net, trainloader, apn_opt, epoch, 'apn')
 

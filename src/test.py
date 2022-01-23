@@ -18,12 +18,13 @@ from pretrain_apn import log, clean, save_img, build_gif
 
 def random_sample(dataloader):
     for batch_idx, (inputs, labels) in enumerate(dataloader, 1):
-        return [inputs[19].cuda(), labels[19].cuda()]
+        return [inputs[5].cuda(), labels[5].cuda()]
 
 def runOnSingleImage(pretrained_model):
     labels = ["complex", "frog_eye_leaf_spot", "healthy", "powdery_mildew", "rust", "scab"]
 
     net = RACNN(num_classes=6).cuda()
+    net.eval()
     net.load_state_dict(torch.load(pretrained_model))
     data_set = get_plant_loader()
     validationloader = torch.utils.data.DataLoader(data_set["validation"], batch_size=32, shuffle=False)
@@ -31,8 +32,8 @@ def runOnSingleImage(pretrained_model):
     sample = random_sample(validationloader)
     preds, _, _, resized = net(sample[0].unsqueeze(0))
     
-    print(preds)
-    print(sample[1])
+    #♣print(preds)
+    #print(sample[1])
 
     for id, pred in enumerate(preds, 0):
         preds[id] = torch.sigmoid(preds[id])

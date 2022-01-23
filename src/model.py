@@ -8,73 +8,34 @@ import torchvision
 class AttentionCropFunction(torch.autograd.Function):
     @staticmethod
     def forward(self, images, locs):
-        
         def h(_x): return 1 / (1 + torch.exp(-10 * _x.float()))
-
-        #in_size = 224
         in_size = images.size()[2]
-        #unit = tensor([[  0,   1,   2,  ..., 221, 222, 223],
-        #               [  0,   1,   2,  ..., 221, 222, 223],
-        #               [  0,   1,   2,  ..., 221, 222, 223],
-        #               ...,
-        #               [  0,   1,   2,  ..., 221, 222, 223],
-        #               [  0,   1,   2,  ..., 221, 222, 223],
-        #               [  0,   1,   2,  ..., 221, 222, 223]])
         unit = torch.stack([torch.arange(0, in_size)] * in_size)
-        #x è 3 tensor([[[  0,   0,   0,  ...,   0,   0,   0],
-        #               [  1,   1,   1,  ...,   1,   1,   1],
-        #               [  2,   2,   2,  ...,   2,   2,   2],
-        #               ...,
-        #               [221, 221, 221,  ..., 221, 221, 221],
-        #               [222, 222, 222,  ..., 222, 222, 222],
-        #               [223, 223, 223,  ..., 223, 223, 223]]
         x = torch.stack([unit.t()] * 3)
-        #y è 3 tensori unit
         y = torch.stack([unit] * 3)
         if isinstance(images, torch.cuda.FloatTensor):
             x, y = x.cuda(), y.cuda()
 
         in_size = images.size()[2]
         ret = []
-
-        #processa tutte le immagini del batch, in questo caso images.size(0) è 12
         for i in range(images.size(0)):
-            # locs sono tensor([[143.3381, 124.7122,  51.1188],
-            #                   [110.5597, 137.9310,  60.7936],
-            #                   [119.1002,  99.9731,  52.5289],
-            #                   [113.5314, 129.4575,  46.4848],
-            #                   [ 79.8117,  94.2794,  54.7804],
-            #                   [117.5080, 136.6172,  63.8196],
-            #                   [ 87.7556, 113.1122,  62.1823],
-            #                   [131.8735, 108.5016,  63.9460],
-            #                   [ 99.1213, 125.6766,  76.2739],
-            #                   [ 90.7646,  89.5686,  49.1010],
-            #                   [ 84.4682, 130.7239,  82.1634],
-            #                   [ 88.4385,  96.4715,  42.9040]], device='cuda:0',
-            #               grad_fn=<MulBackward0>)
-
             tx, ty, tl = locs[i][0], locs[i][1], locs[i][2]
-            
-            #per evitare che si rimpicciolisca troppo
             tl = tl if tl > (in_size/3) else in_size/3
-            #check per evitare che il crop "sbordi"
             tx = tx if tx > tl else tl
             tx = tx if tx < in_size-tl else in_size-tl
             ty = ty if ty > tl else tl
             ty = ty if ty < in_size-tl else in_size-tl
-            
-            # in un esempio, w_off, h_off, w_end, h_end 68 50 218 199
+
             w_off = int(tx-tl) if (tx-tl) > 0 else 0
             h_off = int(ty-tl) if (ty-tl) > 0 else 0
             w_end = int(tx+tl) if (tx+tl) < in_size else in_size
             h_end = int(ty+tl) if (ty+tl) < in_size else in_size
-            
-            #mk cosa fa di preciso?????
+
             mk = (h(x-w_off) - h(x-w_end)) * (h(y-h_off) - h(y-h_end))
             xatt = images[i] * mk
+
             xatt_cropped = xatt[:, w_off: w_end, h_off: h_end]
             before_upsample = Variable(xatt_cropped.unsqueeze(0))
-            #fa l'upsampling dell'immagine croppata a 224x224
             xamp = F.upsample(before_upsample, size=(224, 224), mode='bilinear', align_corners=True)
             ret.append(xamp.data.squeeze())
 
@@ -85,13 +46,19 @@ class AttentionCropFunction(torch.autograd.Function):
     @staticmethod
     def backward(self, grad_output):
         images, ret_tensor = self.saved_variables[0], self.saved_variables[1]
+        #grad_output size [8, 3, 224, 224]
         in_size = 224
+        #setting gradient to zero
         ret = torch.Tensor(grad_output.size(0), 3).zero_()
+        #Energy map of cropped image
         norm = -(grad_output * grad_output).sum(dim=1)
         x = torch.stack([torch.arange(0, in_size)] * in_size).t()
         y = x.t()
+        
+        #x.size(), y.size() equal to [224,224]
         long_size = (in_size/3*2)
         short_size = (in_size/3)
+        #M'() equations
         mx = (x >= long_size).float() - (x < short_size).float()
         my = (y >= long_size).float() - (y < short_size).float()
         ml = (((x < short_size)+(x >= long_size)+(y < short_size)+(y >= long_size)) > 0).float()*2 - 1
@@ -106,6 +73,7 @@ class AttentionCropFunction(torch.autograd.Function):
             ml_batch = ml_batch.cuda()
             ret = ret.cuda()
 
+        #Masked values for each pixel is summed up to propagate the gradient into the APN
         ret[:, 0] = (norm * mx_batch).sum(dim=1).sum(dim=1)
         ret[:, 1] = (norm * my_batch).sum(dim=1).sum(dim=1)
         ret[:, 2] = (norm * ml_batch).sum(dim=1).sum(dim=1)
@@ -141,29 +109,26 @@ class RACNN(nn.Module):
 
         #l'output delle due apn sono 3 valori, che indicano x,y,l
         self.apn1 = nn.Sequential(
-            nn.Linear(320 * 7 * 7, 4096),
-            nn.ReLU(),
-            nn.Dropout(0.5),
-            nn.Linear(4096, 3),
+            nn.Linear(320 * 7 * 7, 1024),
             nn.Tanh(),
+            nn.Linear(1024, 3),
+            nn.Sigmoid(),
         )
 
         self.apn2 = nn.Sequential(
-            nn.Linear(320 * 7 * 7, 4096),
-            nn.ReLU(),
-            nn.Dropout(0.5),
-            nn.Linear(4096, 3),
+            nn.Linear(320 * 7 * 7, 1024),
             nn.Tanh(),
+            nn.Linear(1024, 3),
+            nn.Sigmoid(),
         )
         
         self.echo = None
 
     def forward(self, x):
-        #batch_size = x.shape[0]
         rescale_tl = torch.tensor([1, 1, 0.5], requires_grad=False).cuda()
         # forward @scale-1
-        feature_s1 = self.b1.features[:-1](x)  # torch.Size([batch_size, 320, 7, 7])
-        pool_s1 = self.feature_pool(feature_s1) # torch.Size([batch_size, 320, 1, 1])
+        feature_s1 = self.b1.features[:-1](x)  # torch.Size([1, 320, 7, 7])
+        pool_s1 = self.feature_pool(feature_s1)
         _attention_s1 = self.apn1(feature_s1.view(-1, 320 * 7 * 7))
         attention_s1 = _attention_s1*rescale_tl
         resized_s1 = self.crop_resize(x, attention_s1 * x.shape[-1])
@@ -179,6 +144,7 @@ class RACNN(nn.Module):
         pred1 = self.classifier1(pool_s1.view(-1, 320))
         pred2 = self.classifier2(pool_s2.view(-1, 320))
         pred3 = self.classifier3(pool_s3.view(-1, 320))
+
         return [pred1, pred2, pred3], [feature_s1, feature_s2], [attention_s1, attention_s2], [resized_s1, resized_s2]
 
     def __get_weak_loc(self, features):
@@ -215,7 +181,6 @@ class RACNN(nn.Module):
     def multitask_loss(logits, targets):
         loss = []
         criterion = torch.nn.BCEWithLogitsLoss()
-        criterion = criterion
         for i in range(len(logits)):
             loss.append(criterion(logits[i], targets))
         loss = torch.sum(torch.stack(loss))
@@ -233,9 +198,14 @@ class RACNN(nn.Module):
             for i in range(len(pred)-1):
                 #the loss is the diff between cnn predictions
                 #rank_loss = (pred[i]-pred[i+1] + margin).clamp(min = 0)
-                y = Variable(torch.Tensor(pred[0].size(0)).fill_(-1)).cuda()
-                rank_loss = criterion(pred[i], pred[i+1], y)
-                loss.append(rank_loss)
+                y = torch.tensor([-1]).cuda()
+                #rank_loss = criterion(pred[i], pred[i+1], y)
+                inside_loss = 0
+                x1 = pred[i].split(1)
+                x2 = pred[i+1].split(1)
+                for l in range(len(x1)):
+                    inside_loss += (criterion(x1[l], x2[l], y))
+                loss.append(inside_loss)
             loss = torch.sum(torch.stack(loss))
             losses.append(loss)
         losses = torch.stack(losses)

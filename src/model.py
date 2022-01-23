@@ -188,23 +188,28 @@ class RACNN(nn.Module):
 
     @staticmethod
     def rank_loss(logits, targets, margin=0.05):
+        #TODO modificare in base al valore del target
         #In the paper said softmax? But innapropriate for multiLabel classification, changed to sigmoid
         preds = [torch.sigmoid(x) for x in logits] # preds length equal to 3
         losses = []
         criterion = torch.nn.MarginRankingLoss(margin=0.05)
         criterion = criterion
-        for pred in preds:
+        for index, pred in enumerate(preds):
             loss = []
             for i in range(len(pred)-1):
                 #the loss is the diff between cnn predictions
                 #rank_loss = (pred[i]-pred[i+1] + margin).clamp(min = 0)
-                y = torch.tensor([-1]).cuda()
+                yNeg = torch.tensor([-1]).cuda()
+                yPos = torch.tensor([1]).cuda()
                 #rank_loss = criterion(pred[i], pred[i+1], y)
                 inside_loss = 0
                 x1 = pred[i].split(1)
                 x2 = pred[i+1].split(1)
                 for l in range(len(x1)):
-                    inside_loss += (criterion(x1[l], x2[l], y))
+                    if(targets[index][l]==1):
+                        inside_loss += (criterion(x1[l], x2[l], yNeg))
+                    else:
+                        inside_loss += (criterion(x1[l], x2[l], yPos))
                 loss.append(inside_loss)
             loss = torch.sum(torch.stack(loss))
             losses.append(loss)

@@ -75,7 +75,12 @@ def run(pretrained_model):
         list(net.classifier2.parameters()) + list(net.classifier3.parameters())
     apn_params = list(net.apn1.parameters()) + list(net.apn2.parameters())
 
-    cls_opt = optim.SGD(cls_params, lr=0.001)
+    cls_opt = optim.SGD(cls_params, lr=0.005)
+    scheduler = torch.optim.lr_scheduler.CyclicLR(
+            optim.SGD(cls_params, lr=0.005),
+            base_lr=0.001,
+            max_lr=0.005
+        )
     # TODO da modificare in lr=1e-6
     apn_opt = optim.SGD(apn_params, lr=1e-6)
 
@@ -89,6 +94,7 @@ def run(pretrained_model):
     # 15
     for epoch in range(40):
         cls_loss = train(net, trainloader, cls_opt, epoch, 'backbone')
+        scheduler.step()
         rank_loss = train(net, trainloader, apn_opt, epoch, 'apn')
 
         log(' :: Testing on validation set ...')

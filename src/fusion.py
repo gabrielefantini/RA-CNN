@@ -13,7 +13,7 @@ from torch.autograd import Variable
 class FusionCLS(nn.Module):
     def __init__(self, num_classes):
         super(FusionCLS, self).__init__()
-        self.RACNN = RACNN(num_classes=num_classes)
+        self.RACNN = RACNN(num_classes=num_classes).cuda()
         self.scale_1_2 = nn.Sequential(
             nn.Linear(320*7*7*2, num_classes),
             nn.Sigmoid(),
@@ -34,9 +34,9 @@ class FusionCLS(nn.Module):
                 features[1].view(-1, 320* 7*7),
                 features[2].view(-1, 320* 7*7),
             ], dim=1)    
-
         ret1 = self.scale_1_2(features_1_2)
         ret2 = self.scale_1_2_3(features_1_2_3)
+        print(ret1)
         return ret1, ret2
     
     @staticmethod
@@ -55,13 +55,16 @@ class FusionCLS(nn.Module):
         optimizer_1_2_3.zero_grad()
         # logit --> the vector of raw (non-normalized) predictions that a classification model generates
         loss_1_2 = self.task_loss(scale_1_2, targets)
-        loss_1_2_3 = self.task_loss(scale_1_2, targets)
+        loss_1_2_3 = self.task_loss(scale_1_2_3, targets)
         loss_1_2.backward()
         loss_1_2_3.backward()
         optimizer_1_2.step()
         optimizer_1_2_3.step()
         #nb returning loss.item() is important to not saturate gpu memory!!!
         return loss_1_2.item(), loss_1_2_3.item()
+
+    def load_state(self, pretrained_model):
+        self.RACNN.load_state_dict(torch.load(pretrained_model))
 
     def mode(self, mode_type):
         assert mode_type in ['backbone']
@@ -97,8 +100,8 @@ def test(net, dataloader):
 def run(pretrained_model):
     accuracy = 0
     log(f' :: Start training with {pretrained_model}')
-    net = FusionCLS(num_classes=6)
-    net.load_state_dict(torch.load(pretrained_model))
+    net = FusionCLS(num_classes=6,)
+    net.load_state(pretrained_model)
     cudnn.benchmark = True
 
     fusion_1_2_params = list(net.scale_1_2.parameters())
@@ -114,7 +117,7 @@ def run(pretrained_model):
 
     # 15
     for epoch in range(40):
-        fusion_loss_1_2, fusion_loss_1_2_3 = train(net, trainloader, fusion_1_2_opt, fusion_1_2_3_opt, epoch, 'backbone')
+        fusion_loss_1_2, fusion_loss_1_2_3 = train(net, trainloader, fusion_1_2_opt, fusion_1_2_3_opt, epoch)
         #log(' :: Testing on validation set ...')
         #temp_accuracy, valid_corrects = test(net, validationloader)
 
@@ -138,4 +141,4 @@ if __name__ == "__main__":
     # if not os.path.exists(path):
     #     os.makedirs(path)
     # RACNN con backbone e apn pre addestrate
-    run(pretrained_model='build/racnn_pretrained.pt')
+    run(pretrained_model='build/racnn_efficientNetB0.pt')

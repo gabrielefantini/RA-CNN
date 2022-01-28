@@ -13,7 +13,7 @@ import numpy as np
 
 sys.path.append('.')  # noqa: E402
 from model import RACNN
-from plant_loader import get_plant_loader
+from plant_loader2 import get_plant_loader
 from pretrain_apn import random_sample, log, clean, save_img, build_gif
 
 
@@ -73,14 +73,9 @@ def run(pretrained_model):
     cls_params = list(net.b1.parameters()) + list(net.b2.parameters()) + list(net.b3.parameters()) + \
         list(net.classifier1.parameters()) + \
         list(net.classifier2.parameters()) + list(net.classifier3.parameters())
-    apn_params = list(net.apn1.parameters()) + list(net.apn2.parameters())
+    apn_params =  list(net.apn1.parameters()) + list(net.apn2.parameters()) + list(net.feature_channel_reduction1.parameters()) + list(net.feature_channel_reduction2.parameters())
 
-    cls_opt = optim.SGD(cls_params, lr=0.005)
-    scheduler = torch.optim.lr_scheduler.CyclicLR(
-            optim.SGD(cls_params, lr=0.005),
-            base_lr=0.001,
-            max_lr=0.005
-        )
+    cls_opt = optim.SGD(cls_params, lr=0.002)
     # TODO da modificare in lr=1e-6
     apn_opt = optim.SGD(apn_params, lr=1e-6)
 
@@ -94,7 +89,6 @@ def run(pretrained_model):
     # 15
     for epoch in range(40):
         cls_loss = train(net, trainloader, cls_opt, epoch, 'backbone')
-        scheduler.step()
         rank_loss = train(net, trainloader, apn_opt, epoch, 'apn')
 
         log(' :: Testing on validation set ...')
@@ -113,7 +107,7 @@ def run(pretrained_model):
         save_img(x2, path=f'build/.cache/epoch_{epoch}@4x.jpg',
                  annotation=f'cls_loss = {cls_loss:.7f}, rank_loss = {rank_loss:.7f}')
 
-        # save model per 10 epoches
+
         if temp_accuracy > accuracy:
             accuracy = temp_accuracy
             stamp = f'e{epoch}{int(time.time())}'

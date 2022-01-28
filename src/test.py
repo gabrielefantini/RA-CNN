@@ -13,7 +13,7 @@ from torch.autograd import Variable
 
 sys.path.append('.')  # noqa: E402
 from model import RACNN
-from plant_loader import get_plant_loader
+from plant_loader2 import get_plant_loader
 from pretrain_apn import log, clean, save_img, build_gif
 
 def random_sample(dataloader):
@@ -103,5 +103,5 @@ def run(pretrained_model):
 
 if __name__ == "__main__":
     os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-    runOnSingleImage('build/racnn_efficientNetB0.pt')
-    #run('build/racnn_efficientNetB0.pt')
+    #runOnSingleImage('build/racnn_efficientNetB0.pt')
+    run('build/racnn_efficientNetB0.pt')

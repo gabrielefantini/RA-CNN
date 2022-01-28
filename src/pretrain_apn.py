@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 
 sys.path.append('.')  # noqa: E402
 from model import RACNN
-from plant_loader import PlantDataset, get_plant_loader
+from plant_loader2 import PlantDataset, get_plant_loader
 from torch.autograd import Variable
 
 
@@ -45,12 +45,12 @@ def run(pretrained_backbone=None):
 
     cudnn.benchmark = True
 
-    params = list(net.apn1.parameters()) + list(net.apn2.parameters())
+    params = list(net.apn1.parameters()) + list(net.apn2.parameters()) + list(net.feature_channel_reduction1.parameters()) + list(net.feature_channel_reduction2.parameters())
     optimizer = optim.SGD(params, lr=0.001, momentum=0.9)
 
     data_set = get_plant_loader()
-    trainloader = torch.utils.data.DataLoader(data_set["train"], batch_size=8, shuffle=True, num_workers=4)
-    validationloader = torch.utils.data.DataLoader(data_set["validation"], batch_size=8, shuffle=False)
+    trainloader = torch.utils.data.DataLoader(data_set["train"], batch_size=4, shuffle=True, num_workers=4)
+    validationloader = torch.utils.data.DataLoader(data_set["validation"], batch_size=4, shuffle=False)
     sample = random_sample(validationloader)
     
     net.mode("pretrain_apn")
@@ -72,7 +72,7 @@ def run(pretrained_backbone=None):
                 save_img(x1, path=f'build/.cache/step_{step}@2x.jpg', annotation=f'loss = {avg_loss:.7f}, step = {step}')
                 save_img(x2, path=f'build/.cache/step_{step}@4x.jpg', annotation=f'loss = {avg_loss:.7f}, step = {step}')
             print(step)
-            if step >= 150:  # 128 steps is enough for pretraining
+            if step >= 200:  # 128 steps is enough for pretraining
                 torch.save(net.state_dict(), f'build/racnn_pretrained.pt')
                 return
 

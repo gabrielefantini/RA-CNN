@@ -57,8 +57,8 @@ class PlantDataset(Dataset):
             image_numpy = image_tensor.cpu().float().numpy()  # convert it into a numpy array
             if image_numpy.shape[0] == 1:  # grayscale to RGB
                 image_numpy = np.tile(image_numpy, (3, 1, 1))
-            for i in range(len(mean)):
-                image_numpy[i] = image_numpy[i] * std[i] + mean[i]
+            #for i in range(len(mean)):
+            #   image_numpy[i] = image_numpy[i] * std[i] + mean[i]
             image_numpy = image_numpy * 255
             # post-processing: tranpose and scaling
             image_numpy = np.transpose(image_numpy, (1, 2, 0))

@@ -8,7 +8,7 @@ import torch.nn.functional as F
 import torchvision
 from torch.autograd import Variable
 from torch.utils.data import DataLoader
-from plant_loader import get_plant_loader
+from plant_loader2 import get_plant_loader
 
 
 def log(msg):
@@ -69,7 +69,7 @@ def run():
     validationloader = DataLoader(data_set["validation"], batch_size=32, shuffle=False)
     
 
-    for epoch in range(15):  # loop over the dataset multiple times
+    for epoch in range(10):  # loop over the dataset multiple times
             losses = 0
             accuracy = 0
 

@@ -8,7 +8,7 @@ import torch.nn.functional as F
 import torchvision
 from torch.autograd import Variable
 from torch.utils.data import DataLoader
-from plant_loader2 import get_plant_loader
+from plant_loader import get_plant_loader
 
 
 def log(msg):

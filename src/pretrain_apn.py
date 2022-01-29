@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 
 sys.path.append('.')  # noqa: E402
 from model import RACNN
-from plant_loader2 import PlantDataset, get_plant_loader
+from plant_loader import PlantDataset, get_plant_loader
 from torch.autograd import Variable
 
 
@@ -45,7 +45,7 @@ def run(pretrained_backbone=None):
 
     cudnn.benchmark = True
 
-    params = list(net.apn1.parameters()) + list(net.apn2.parameters()) + list(net.feature_channel_reduction1.parameters()) + list(net.feature_channel_reduction2.parameters())
+    params = list(net.apn1.parameters()) + list(net.apn2.parameters())
     optimizer = optim.SGD(params, lr=0.001, momentum=0.9)
 
     data_set = get_plant_loader()

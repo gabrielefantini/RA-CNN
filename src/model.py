@@ -47,18 +47,21 @@ class AttentionCropFunction(torch.autograd.Function):
     @staticmethod
     def backward(self, grad_output):
         images, ret_tensor = self.saved_variables[0], self.saved_variables[1]
-        #grad_output size [8, 3, 224, 224]
+        #grad_output size [batchSize, 3, 224, 224]
         in_size = 224
         #setting gradient to zero
         ret = torch.Tensor(grad_output.size(0), 3).zero_()
         #Energy map of cropped image
         norm = -(grad_output * grad_output).sum(dim=1)
+
         x = torch.stack([torch.arange(0, in_size)] * in_size).t()
         y = x.t()
-        
+
         #x.size(), y.size() equal to [224,224]
-        long_size = (in_size/3*2)
-        short_size = (in_size/3)
+        #long_size = (in_size/3*2)
+        #short_size = (in_size/3)
+        long_size = 168
+        short_size = 56
         #M'() equations
         mx = (x >= long_size).float() - (x < short_size).float()
         my = (y >= long_size).float() - (y < short_size).float()
@@ -112,23 +115,21 @@ class RACNN(nn.Module):
             nn.Dropout(p=0.2, inplace=True),
             nn.Linear(in_features=1280, out_features=num_classes, bias=True)
         )
-        self.feature_channel_reduction1 = nn.Conv2d(1280, 160, kernel_size=1, stride=1)
-        self.feature_channel_reduction2 = nn.Conv2d(1280, 160, kernel_size=1, stride=1)
-        self.feature_pool = torch.nn.AdaptiveAvgPool2d(output_size=1)
+        self.feature_pooling = nn.AdaptiveAvgPool2d(output_size=1)
         self.crop_resize = AttentionCropLayer()
 
         #l'output delle due apn sono 3 valori, che indicano x,y,l
         self.apn1 = nn.Sequential(
-            nn.Linear(160 * 7 * 7, 512),
+            nn.Linear(320*7*7, 1024),
             nn.Tanh(),
-            nn.Linear(512, 3),
+            nn.Linear(1024, 3),
             nn.Sigmoid(),
         )
 
         self.apn2 = nn.Sequential(
-            nn.Linear(160 * 7 * 7, 512),
+            nn.Linear(320*7*7, 1024),
             nn.Tanh(),
-            nn.Linear(512, 3),
+            nn.Linear(1024, 3),
             nn.Sigmoid(),
         )
         
@@ -136,31 +137,39 @@ class RACNN(nn.Module):
 
     def forward(self, x):
         rescale_tl = torch.tensor([1, 1, 0.5], requires_grad=False).cuda()
-        # forward @scale-1
-        feature_s1 = self.b1.features(x)  # torch.Size([BatchSize, 1280, 7, 7])
-        pool_s1 = self.feature_pool(feature_s1)
-        _attention_s1 = self.apn1(
-            self.feature_channel_reduction1(feature_s1).view(-1, 160 * 7 * 7)
-        )
+        #-------------- forward @scale-1 ------------------------------------------------------
+        feature_s1 = self.b1.features[:-1](x)  # torch.Size([BatchSize, 1280, 7, 7])
+        #pool_s1 = self.feature_pool(feature_s1)
+        _attention_s1 = self.apn1(feature_s1.view(-1, 320*7*7))
         attention_s1 = _attention_s1*rescale_tl
         resized_s1 = self.crop_resize(x, attention_s1 * x.shape[-1])
-        # forward @scale-2
-        feature_s2 = self.b2.features(resized_s1)  # torch.Size([BatchSize, 1280, 7, 7])
-        pool_s2 = self.feature_pool(feature_s2)
-        _attention_s2 =  self.apn2(
-            self.feature_channel_reduction2(feature_s2).view(-1, 160 * 7 * 7)
-        )
+
+        #-------------- forward @scale-2 -------------------------------------------------------
+        feature_s2 = self.b2.features[:-1](resized_s1)  # torch.Size([BatchSize, 1280, 7, 7])
+        #pool_s2 = self.feature_pool(feature_s2)
+        _attention_s2 =  self.apn2(feature_s2.view(-1, 320*7*7))
         attention_s2 = _attention_s2*rescale_tl
         resized_s2 = self.crop_resize(resized_s1, attention_s2 * resized_s1.shape[-1])
-        # forward @scale-3
-        feature_s3 = self.b3.features(resized_s2)   # torch.Size([BatchSize, 1280, 7, 7])
-        pool_s3 = self.feature_pool(feature_s3)
+        
+        #--------------- forward @scale-3 -------------------------------------------------------
+        #feature_s3 = self.b3.features[:-1](resized_s2)   # torch.Size([BatchSize, 1280, 7, 7])
+        #pool_s3 = self.feature_pool(feature_s3)
 
-        pred1 = self.classifier1(pool_s1.view(-1, 1280))
-        pred2 = self.classifier2(pool_s2.view(-1, 1280))
-        pred3 = self.classifier3(pool_s3.view(-1, 1280))
+        
+        pred1 = self.classifier1(
+            self.feature_pooling(
+                self.b1.features(x)
+                ).view(-1, 1280))
+        pred2 = self.classifier2(
+            self.feature_pooling(
+                self.b2.features(resized_s1)
+                ).view(-1, 1280))
+        pred3 = self.classifier3(
+            self.feature_pooling(
+                self.b2.features(resized_s2)
+                ).view(-1, 1280))
 
-        return [pred1, pred2, pred3], [feature_s1, feature_s2, feature_s3], [attention_s1, attention_s2], [resized_s1, resized_s2]
+        return [pred1, pred2, pred3], [feature_s1, feature_s2], [attention_s1, attention_s2], [resized_s1, resized_s2]
 
     def __get_weak_loc(self, features):
         ret = []   # search regions with the highest response value in conv5
@@ -203,7 +212,6 @@ class RACNN(nn.Module):
 
     @staticmethod
     def rank_loss(logits, targets, margin=0.05):
-        #TODO modificare in base al valore del target
         #In the paper said softmax? But innapropriate for multiLabel classification, changed to sigmoid
         preds = [torch.sigmoid(x) for x in logits] # preds length equal to 3
         losses = []

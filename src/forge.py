@@ -13,7 +13,7 @@ import numpy as np
 
 sys.path.append('.')  # noqa: E402
 from model import RACNN
-from plant_loader2 import get_plant_loader
+from plant_loader import get_plant_loader
 from pretrain_apn import random_sample, log, clean, save_img, build_gif
 
 
@@ -73,21 +73,22 @@ def run(pretrained_model):
     cls_params = list(net.b1.parameters()) + list(net.b2.parameters()) + list(net.b3.parameters()) + \
         list(net.classifier1.parameters()) + \
         list(net.classifier2.parameters()) + list(net.classifier3.parameters())
-    apn_params =  list(net.apn1.parameters()) + list(net.apn2.parameters()) + list(net.feature_channel_reduction1.parameters()) + list(net.feature_channel_reduction2.parameters())
+    apn_params =  list(net.apn1.parameters()) + list(net.apn2.parameters())
 
-    cls_opt = optim.SGD(cls_params, lr=0.002)
+    cls_opt = optim.SGD(cls_params, lr=0.001, momentum=0.9)
     # TODO da modificare in lr=1e-6
     apn_opt = optim.SGD(apn_params, lr=1e-6)
 
     data_set = get_plant_loader()
     trainloader = torch.utils.data.DataLoader(
-        data_set["train"], batch_size=16, shuffle=True)
+        data_set["train"], batch_size=8, shuffle=True)
     validationloader = torch.utils.data.DataLoader(
-        data_set["validation"], batch_size=16, shuffle=False)
+        data_set["validation"], batch_size=8, shuffle=False)
     sample = random_sample(validationloader)
 
     # 15
     for epoch in range(40):
+        
         cls_loss = train(net, trainloader, cls_opt, epoch, 'backbone')
         rank_loss = train(net, trainloader, apn_opt, epoch, 'apn')
 
@@ -102,15 +103,12 @@ def run(pretrained_model):
         # visualize cropped inputs
         _, _, _, resized = net(sample.unsqueeze(0))
         x1, x2 = resized[0].data, resized[1].data
-        save_img(x1, path=f'build/.cache/epoch_{epoch}@2x.jpg',
-                 annotation=f'cls_loss = {cls_loss:.7f}, rank_loss = {rank_loss:.7f}')
-        save_img(x2, path=f'build/.cache/epoch_{epoch}@4x.jpg',
-                 annotation=f'cls_loss = {cls_loss:.7f}, rank_loss = {rank_loss:.7f}')
+        save_img(x1, path=f'build/.cache/epoch_{epoch}@2x.jpg')
+        save_img(x2, path=f'build/.cache/epoch_{epoch}@4x.jpg')
 
-
+        
         if temp_accuracy > accuracy:
             accuracy = temp_accuracy
-            stamp = f'e{epoch}{int(time.time())}'
             torch.save(net.state_dict(), f'build/racnn_efficientNetB0.pt')
             log(f' :: Saved model dict as:\tbuild/racnn_efficientNetB0.pt')
             torch.save(cls_opt.state_dict(), f'build/cls_optimizer.pt')

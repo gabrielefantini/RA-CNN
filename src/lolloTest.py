@@ -15,7 +15,7 @@ import random
 
 sys.path.append('.')  # noqa: E402
 from model import RACNN
-from plant_loader2 import get_plant_loader
+from plant_loader import get_plant_loader
 from pretrain_apn import log, clean, save_img, build_gif
 
 

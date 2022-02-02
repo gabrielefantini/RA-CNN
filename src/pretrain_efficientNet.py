@@ -46,14 +46,23 @@ def eval(net, dataloader):
             return correct_top1/((step+1)*int(inputs.shape[0]))
 
 def run():
+    def count_parameters(model):
+        return sum(p.numel() for p in model.parameters() if p.requires_grad)
+    
+    #non freeza nessun parametro!!! re inizializza soltanto il fully connected finale!
+    #per freezare --> o require_grad = False o inserisco nell'ottimizzatore solo i parametri che voglio addestrare
     state_dict = torchvision.models.efficientnet_b0(pretrained=True).state_dict()
+
     state_dict.pop('classifier.1.weight')
     state_dict.pop('classifier.1.bias')
     net = torchvision.models.efficientnet_b0(num_classes=6).cuda()
 
     state_dict['classifier.1.weight'] = net.state_dict()['classifier.1.weight']
     state_dict['classifier.1.bias'] = net.state_dict()['classifier.1.bias']
+
     net.load_state_dict(state_dict)
+
+    
     cudnn.benchmark = True
 
    
@@ -65,7 +74,7 @@ def run():
 
     data_set = get_plant_loader()
 
-    trainloader = DataLoader(data_set["train"], batch_size=32, shuffle=True, num_workers=4)
+    trainloader = DataLoader(data_set["train"], batch_size=32, shuffle=True)
     validationloader = DataLoader(data_set["validation"], batch_size=32, shuffle=False)
     
 

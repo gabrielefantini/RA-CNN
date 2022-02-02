@@ -10,6 +10,7 @@ import torch.optim as optim
 import torch.backends.cudnn as cudnn
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
+import torchvision
 
 sys.path.append('.')  # noqa: E402
 from model import RACNN
@@ -35,10 +36,18 @@ def save_img(x, path, annotation=''):
     plt.savefig(path, dpi=300, pad_inches=0)    # visualize masked image
 
 
-def run(pretrained_backbone=None):
+def run(pretrained_backbone):
     net = RACNN(num_classes=6).cuda()
     if pretrained_backbone:  # Using pretrained backbone for apn pretraining
+
         state_dict = torch.load(pretrained_backbone).state_dict()
+         
+        state_dict.pop('classifier.1.weight')
+        state_dict.pop('classifier.1.bias')
+        cls = torchvision.models.efficientnet_b0(num_classes=6).cuda()
+        state_dict['classifier.1.weight'] = cls.state_dict()['classifier.1.weight']
+        state_dict['classifier.1.bias'] = cls.state_dict()['classifier.1.bias']
+        
         net.b1.load_state_dict(state_dict)
         net.b2.load_state_dict(state_dict)
         net.b3.load_state_dict(state_dict)
@@ -49,8 +58,8 @@ def run(pretrained_backbone=None):
     optimizer = optim.SGD(params, lr=0.001, momentum=0.9)
 
     data_set = get_plant_loader()
-    trainloader = torch.utils.data.DataLoader(data_set["train"], batch_size=4, shuffle=True, num_workers=4)
-    validationloader = torch.utils.data.DataLoader(data_set["validation"], batch_size=4, shuffle=False)
+    trainloader = torch.utils.data.DataLoader(data_set["train"], batch_size=8, shuffle=True)
+    validationloader = torch.utils.data.DataLoader(data_set["validation"], batch_size=8, shuffle=False)
     sample = random_sample(validationloader)
     
     net.mode("pretrain_apn")
@@ -72,7 +81,7 @@ def run(pretrained_backbone=None):
                 save_img(x1, path=f'build/.cache/step_{step}@2x.jpg', annotation=f'loss = {avg_loss:.7f}, step = {step}')
                 save_img(x2, path=f'build/.cache/step_{step}@4x.jpg', annotation=f'loss = {avg_loss:.7f}, step = {step}')
             print(step)
-            if step >= 200:  # 128 steps is enough for pretraining
+            if step >= 100:  # 128 steps is enough for pretraining
                 torch.save(net.state_dict(), f'build/racnn_pretrained.pt')
                 return
 

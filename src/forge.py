@@ -1,3 +1,4 @@
+from pyexpat import features
 import imageio
 import os
 import shutil
@@ -15,7 +16,6 @@ sys.path.append('.')  # noqa: E402
 from model import RACNN
 from plant_loader import get_plant_loader
 from pretrain_apn import random_sample, log, clean, save_img, build_gif
-
 
 def avg(x): return sum(x)/len(x)
 
@@ -70,12 +70,15 @@ def run(pretrained_model):
 
     # ognuna delle 3 cnn del modello parte con i valori della cnn pre addestrata e poi ognuna si specializza
     # con i propri parametri
-    cls_params = list(net.b1.parameters()) + list(net.b2.parameters()) + list(net.b3.parameters())
+    cls_params = list(net.classifier1.parameters()) + list(net.classifier2.parameters()) + list(net.classifier3.parameters())\
+                + list(net.b1.features.parameters())+ list(net.b2.features.parameters())+ list(net.b3.features.parameters())
     apn_params =  list(net.apn1.parameters()) + list(net.apn2.parameters())
 
+    print(len(cls_params))
+    
     def count_parameters(model):
         return sum(p.numel() for p in model.parameters() if p.requires_grad)
-    
+        
 
     cls_opt = optim.SGD(cls_params, lr=0.001, momentum=0.9)
     # TODO da modificare in lr=1e-6
@@ -83,9 +86,9 @@ def run(pretrained_model):
 
     data_set = get_plant_loader()
     trainloader = torch.utils.data.DataLoader(
-        data_set["train"], batch_size=8, shuffle=True)
+        data_set["train"], batch_size=16, shuffle=True)
     validationloader = torch.utils.data.DataLoader(
-        data_set["validation"], batch_size=8, shuffle=False)
+        data_set["validation"], batch_size=16, shuffle=False)
     sample = random_sample(validationloader)
 
     # 15

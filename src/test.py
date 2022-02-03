@@ -10,6 +10,8 @@ import torch.backends.cudnn as cudnn
 import torch.nn.functional as F
 from torch.autograd import Variable
 
+from torch.utils.tensorboard import SummaryWriter
+writer = SummaryWriter('runs/experiment_1')
 
 sys.path.append('.')  # noqa: E402
 from model import RACNN
@@ -63,7 +65,7 @@ def run(pretrained_model):
     net.load_state_dict(torch.load(pretrained_model))
     net.eval()
     data_set = get_plant_loader()
-    validationloader = torch.utils.data.DataLoader(data_set["validation"], batch_size=32, shuffle=False)
+    validationloader = torch.utils.data.DataLoader(data_set["validation"], batch_size=8, shuffle=False)
 
     
     correct_summary = {
@@ -81,6 +83,12 @@ def run(pretrained_model):
     inputsNumber = 0
     for step, (inputs, labels) in enumerate(validationloader, 0):
         inputs, labels = Variable(inputs).cuda(), Variable(labels).cuda()
+        
+        if step == 999999999999:
+            dataiter = iter(validationloader)
+            images, labels = dataiter.next()
+            writer.add_graph(net, images.cuda())
+            writer.close()
 
         inputsNumber += inputs.size(0)    
         
@@ -103,5 +111,5 @@ def run(pretrained_model):
 
 if __name__ == "__main__":
     os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-    #runOnSingleImage('build/racnn_efficientNetB0.pt')
-    run('build/racnn_efficientNetB0.pt')
+    runOnSingleImage('build/racnn_efficientNetB0.pt')
+    #run('build/racnn_pretrained.pt')

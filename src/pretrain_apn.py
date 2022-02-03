@@ -38,19 +38,12 @@ def save_img(x, path, annotation=''):
 
 def run(pretrained_backbone):
     net = RACNN(num_classes=6).cuda()
-    if pretrained_backbone:  # Using pretrained backbone for apn pretraining
+    
+    state_dict = torch.load(pretrained_backbone).state_dict()
 
-        state_dict = torch.load(pretrained_backbone).state_dict()
-         
-        state_dict.pop('classifier.1.weight')
-        state_dict.pop('classifier.1.bias')
-        cls = torchvision.models.efficientnet_b0(num_classes=6).cuda()
-        state_dict['classifier.1.weight'] = cls.state_dict()['classifier.1.weight']
-        state_dict['classifier.1.bias'] = cls.state_dict()['classifier.1.bias']
-        
-        net.b1.load_state_dict(state_dict)
-        net.b2.load_state_dict(state_dict)
-        net.b3.load_state_dict(state_dict)
+    net.b1.load_state_dict(state_dict)
+    net.b2.load_state_dict(state_dict)
+    net.b3.load_state_dict(state_dict)
 
     cudnn.benchmark = True
 
@@ -81,7 +74,7 @@ def run(pretrained_backbone):
                 save_img(x1, path=f'build/.cache/step_{step}@2x.jpg', annotation=f'loss = {avg_loss:.7f}, step = {step}')
                 save_img(x2, path=f'build/.cache/step_{step}@4x.jpg', annotation=f'loss = {avg_loss:.7f}, step = {step}')
             print(step)
-            if step >= 100:  # 128 steps is enough for pretraining
+            if step >= 150:  # 128 steps is enough for pretraining
                 torch.save(net.state_dict(), f'build/racnn_pretrained.pt')
                 return
 

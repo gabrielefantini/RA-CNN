@@ -16,8 +16,8 @@ class PlantDataset(Dataset):
         # means = [109.97 / 255., 127.34 / 255., 123.88 / 255.]
 
         # calculated on this dataset
-        means = [0.4874, 0.6265, 0.4082]
-        std = [0.1634, 0.1441, 0.1704]
+        mean=[0.485, 0.456, 0.406]
+        std=[0.229, 0.224, 0.225]
 
         self.image_id = df['image'].values
         self.labels = df.iloc[:, 1:].values
@@ -27,7 +27,7 @@ class PlantDataset(Dataset):
             transforms.Resize((224, 224)),
             transforms.ToTensor(),
             transforms.Normalize(
-                mean=means,
+                mean=mean,
                 std=std)
         ])
 
@@ -49,13 +49,13 @@ class PlantDataset(Dataset):
 
     @staticmethod
     def tensor_to_img(x, imtype=np.uint8):
-        # Imagenet
-        # mean = [109.97 / 255., 127.34 / 255., 123.88 / 255.]
-        # std = [1. / 255., 1. / 255., 1. / 255.]
-
+        '''
         # calculated on this dataset
         mean = [0.4874, 0.6265, 0.4082]
         std = [0.1634, 0.1441, 0.1704]
+        '''
+        mean=[0.485, 0.456, 0.406]
+        std=[0.229, 0.224, 0.225]
 
         if not isinstance(x, np.ndarray):
             if isinstance(x, torch.Tensor):  # get the data from a variable

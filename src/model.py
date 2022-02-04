@@ -1,4 +1,3 @@
-from pyexpat import features
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -47,21 +46,18 @@ class AttentionCropFunction(torch.autograd.Function):
     @staticmethod
     def backward(self, grad_output):
         images, ret_tensor = self.saved_variables[0], self.saved_variables[1]
-        #grad_output size [batchSize, 3, 224, 224]
+        #grad_output size [8, 3, 224, 224]
         in_size = 224
         #setting gradient to zero
         ret = torch.Tensor(grad_output.size(0), 3).zero_()
         #Energy map of cropped image
         norm = -(grad_output * grad_output).sum(dim=1)
-
         x = torch.stack([torch.arange(0, in_size)] * in_size).t()
         y = x.t()
-
+        
         #x.size(), y.size() equal to [224,224]
-        #long_size = (in_size/3*2)
-        #short_size = (in_size/3)
-        long_size = 168
-        short_size = 56
+        long_size = (in_size/3*2)
+        short_size = (in_size/3)
         #M'() equations
         mx = (x >= long_size).float() - (x < short_size).float()
         my = (y >= long_size).float() - (y < short_size).float()
@@ -103,76 +99,57 @@ class RACNN(nn.Module):
         self.b2 = torchvision.models.efficientnet_b0(num_classes=num_classes)
         self.b3 = torchvision.models.efficientnet_b0(num_classes=num_classes)
 
+        self.classifier1 = nn.Linear(320, num_classes)
+        self.classifier2 = nn.Linear(320, num_classes)
+        self.classifier3 = nn.Linear(320, num_classes)
+
+        self.feature_pool = torch.nn.AdaptiveAvgPool2d(output_size=1)
+        #self.atten_pool = nn.MaxPool2d(kernel_size=2, stride=2)
         self.crop_resize = AttentionCropLayer()
 
         #l'output delle due apn sono 3 valori, che indicano x,y,l
         self.apn1 = nn.Sequential(
-            nn.Linear(1280, 1024),
+            nn.Linear(320 * 7 * 7, 1024),
             nn.Tanh(),
             nn.Linear(1024, 3),
             nn.Sigmoid(),
         )
 
         self.apn2 = nn.Sequential(
-            nn.Linear(1280, 1024),
+            nn.Linear(320 * 7 * 7, 1024),
             nn.Tanh(),
             nn.Linear(1024, 3),
             nn.Sigmoid(),
         )
         
-
-        self.classifier1 = nn.Sequential(
-            nn.Dropout(p=0.2, inplace=True),
-            nn.Linear(in_features=1280, out_features=6, bias=True)
-        )
-        self.classifier2 = nn.Sequential(
-            nn.Dropout(p=0.2, inplace=True),
-            nn.Linear(in_features=1280, out_features=6, bias=True)
-        )
-        self.classifier3 = nn.Sequential(
-            nn.Dropout(p=0.2, inplace=True),
-            nn.Linear(in_features=1280, out_features=6, bias=True)
-        )
-
-        self.avgPooling = nn.AdaptiveAvgPool2d(output_size=1)
         self.echo = None
 
     def forward(self, x):
         rescale_tl = torch.tensor([1, 1, 0.5], requires_grad=False).cuda()
-        #-------------- forward @scale-1 ------------------------------------------------------
-        feature_s1 = self.b1.features(x)  # torch.Size([BatchSize, 1280, 7, 7])
-        #pool_s1 = self.feature_pool(feature_s1)
-        _attention_s1 = self.apn1(self.avgPooling(feature_s1).view(-1, 1280))
+        # forward @scale-1
+        feature_s1 = self.b1.features[:-1](x)  # torch.Size([1, 320, 7, 7])
+        pool_s1 = self.feature_pool(feature_s1)
+        _attention_s1 = self.apn1(feature_s1.view(-1, 320 * 7 * 7))
         attention_s1 = _attention_s1*rescale_tl
         resized_s1 = self.crop_resize(x, attention_s1 * x.shape[-1])
-
-        #-------------- forward @scale-2 -------------------------------------------------------
-        feature_s2 = self.b2.features(resized_s1)  # torch.Size([BatchSize, 1280, 7, 7])
-        #pool_s2 = self.feature_pool(feature_s2)
-        _attention_s2 =  self.apn2(self.avgPooling(feature_s2).view(-1, 1280))
+        # forward @scale-2
+        feature_s2 = self.b2.features[:-1](resized_s1)  # torch.Size([1, 320, 7, 7])
+        pool_s2 = self.feature_pool(feature_s2)
+        _attention_s2 = self.apn2(feature_s2.view(-1, 320 * 7 * 7))
         attention_s2 = _attention_s2*rescale_tl
         resized_s2 = self.crop_resize(resized_s1, attention_s2 * resized_s1.shape[-1])
+        # forward @scale-3
+        feature_s3 = self.b3.features[:-1](resized_s2)
+        pool_s3 = self.feature_pool(feature_s3)
         
-        #--------------- forward @scale-3 -------------------------------------------------------
-        feature_s3 = self.b3.features(resized_s2)   # torch.Size([BatchSize, 1280, 7, 7])
-        #pool_s3 = self.feature_pool(feature_s3)
-        
-        pred1 = self.classifier1(
-            self.avgPooling(
-                feature_s1
-            ).view(-1, 1280)
-        )
-        pred2 = self.classifier2(
-            self.avgPooling(
-                feature_s2
-            ).view(-1, 1280)
-        )
-        pred3 = self.classifier3(
-            self.avgPooling(
-                feature_s3
-            ).view(-1, 1280)
-        )
-
+        pred1 = self.classifier1(pool_s1.view(-1, 320))
+        pred2 = self.classifier2(pool_s2.view(-1, 320))
+        pred3 = self.classifier3(pool_s3.view(-1, 320))
+        '''
+        pred1 = self.b1(x)
+        pred2 = self.b2(resized_s1)
+        pred3 = self.b3(resized_s2)
+        '''
         return [pred1, pred2, pred3], [feature_s1, feature_s2], [attention_s1, attention_s2], [resized_s1, resized_s2]
 
     def __get_weak_loc(self, features):
@@ -220,23 +197,14 @@ class RACNN(nn.Module):
         preds = [torch.sigmoid(x) for x in logits] # preds length equal to 3
         losses = []
         criterion = torch.nn.MarginRankingLoss(margin=0.05)
-        for index, pred in enumerate(preds):
+        for pred in preds:
             loss = []
             for i in range(len(pred)-1):
                 #the loss is the diff between cnn predictions
                 #rank_loss = (pred[i]-pred[i+1] + margin).clamp(min = 0)
-                yNeg = torch.tensor([-1]).cuda()
-                #yPos = torch.tensor([1]).cuda()
-                #rank_loss = criterion(pred[i], pred[i+1], y)
-                inside_loss = 0
-                x1 = pred[i].split(1)
-                x2 = pred[i+1].split(1)
-                for l in range(len(x1)):
-                    if(targets[index][l]==1):
-                        inside_loss += (criterion(x1[l], x2[l], yNeg))
-                    #else:
-                    #    inside_loss += (criterion(x1[l], x2[l], yPos))
-                loss.append(inside_loss)
+                y = torch.tensor([-1]).cuda()
+                rank_loss = criterion(pred[i], pred[i+1], y)
+                loss.append(rank_loss)
             loss = torch.sum(torch.stack(loss))
             losses.append(loss)
         losses = torch.stack(losses)

@@ -40,7 +40,6 @@ def run(pretrained_backbone):
     net = RACNN(num_classes=6).cuda()
     
     state_dict = torch.load(pretrained_backbone).state_dict()
-
     net.b1.load_state_dict(state_dict)
     net.b2.load_state_dict(state_dict)
     net.b3.load_state_dict(state_dict)

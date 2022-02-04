@@ -240,6 +240,6 @@ def run(pretrained_model):
 if __name__ == "__main__":
     os.environ["CUDA_VISIBLE_DEVICES"] = "0"
     clean()
-    runTest('build/racnn_efficientNetB0.pt')
+    runTest('build/racnn_pretrained.pt')
     # runOnSingleImage('build/racnn_efficientNetB0.pt')
     # run('build/racnn_efficientNetB0.pt')

@@ -70,17 +70,14 @@ def run(pretrained_model):
 
     # ognuna delle 3 cnn del modello parte con i valori della cnn pre addestrata e poi ognuna si specializza
     # con i propri parametri
-    cls_params = list(net.classifier1.parameters()) + list(net.classifier2.parameters()) + list(net.classifier3.parameters())\
-                + list(net.b1.features.parameters())+ list(net.b2.features.parameters())+ list(net.b3.features.parameters())
+    cls_params = list(net.b1.parameters()) + list(net.b2.parameters()) + list(net.b3.parameters())\
+                + list(net.classifier1.parameters()) + list(net.classifier2.parameters()) + list(net.classifier3.parameters())
     apn_params =  list(net.apn1.parameters()) + list(net.apn2.parameters())
-
-    print(len(cls_params))
     
     def count_parameters(model):
-        return sum(p.numel() for p in model.parameters() if p.requires_grad)
-        
+        return sum(p.numel() for p in model.parameters() if p.requires_grad)    
 
-    cls_opt = optim.SGD(cls_params, lr=0.001, momentum=0.9)
+    cls_opt = optim.SGD(cls_params, lr=0.002)
     # TODO da modificare in lr=1e-6
     apn_opt = optim.SGD(apn_params, lr=1e-6)
 

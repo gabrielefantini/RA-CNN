@@ -34,7 +34,7 @@ def runOnSingleImage(pretrained_model):
     sample = random_sample(validationloader)
     preds, _, _, resized = net(sample[0].unsqueeze(0))
     
-    #♣print(preds)
+    #print(preds)
     #print(sample[1])
 
     for id, pred in enumerate(preds, 0):
@@ -84,7 +84,7 @@ def run(pretrained_model):
     for step, (inputs, labels) in enumerate(validationloader, 0):
         inputs, labels = Variable(inputs).cuda(), Variable(labels).cuda()
         
-        if step == 999999999999:
+        if step == 1:
             dataiter = iter(validationloader)
             images, labels = dataiter.next()
             writer.add_graph(net, images.cuda())
@@ -111,5 +111,5 @@ def run(pretrained_model):
 
 if __name__ == "__main__":
     os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-    runOnSingleImage('build/racnn_efficientNetB0.pt')
-    #run('build/racnn_pretrained.pt')
+    #runOnSingleImage('build/racnn_efficientNetB0.pt')
+    run('build/racnn_pretrained.pt')

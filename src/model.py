@@ -99,11 +99,27 @@ class RACNN(nn.Module):
         self.b2 = torchvision.models.efficientnet_b0(num_classes=num_classes)
         self.b3 = torchvision.models.efficientnet_b0(num_classes=num_classes)
 
-        self.classifier1 = nn.Linear(320, num_classes)
-        self.classifier2 = nn.Linear(320, num_classes)
-        self.classifier3 = nn.Linear(320, num_classes)
+        self.b1f = self.b1.features[:-1]
+        self.b2f = self.b2.features[:-1]
+        self.b3f = self.b3.features[:-1]
+        
+        self.classifier1 = nn.Sequential(
+            nn.AdaptiveAvgPool2d(output_size=1),
+            nn.Flatten(),
+            nn.Linear(320, num_classes)
+        )
+        self.classifier2 = nn.Sequential(
+            nn.AdaptiveAvgPool2d(output_size=1),
+            nn.Flatten(),
+            nn.Linear(320, num_classes)
+        )
+        self.classifier3 = nn.Sequential(
+            nn.AdaptiveAvgPool2d(output_size=1),
+            nn.Flatten(),
+            nn.Linear(320, num_classes)
+        )
 
-        self.feature_pool = torch.nn.AdaptiveAvgPool2d(output_size=1)
+        #self.feature_pool = torch.nn.AdaptiveAvgPool2d(output_size=1)
         #self.atten_pool = nn.MaxPool2d(kernel_size=2, stride=2)
         self.crop_resize = AttentionCropLayer()
 
@@ -127,24 +143,24 @@ class RACNN(nn.Module):
     def forward(self, x):
         rescale_tl = torch.tensor([1, 1, 0.5], requires_grad=False).cuda()
         # forward @scale-1
-        feature_s1 = self.b1.features[:-1](x)  # torch.Size([1, 320, 7, 7])
-        pool_s1 = self.feature_pool(feature_s1)
+        feature_s1 = self.b1f(x)  # torch.Size([1, 320, 7, 7])
+        #pool_s1 = self.feature_pool(feature_s1)
         _attention_s1 = self.apn1(feature_s1.view(-1, 320 * 7 * 7))
         attention_s1 = _attention_s1*rescale_tl
         resized_s1 = self.crop_resize(x, attention_s1 * x.shape[-1])
         # forward @scale-2
-        feature_s2 = self.b2.features[:-1](resized_s1)  # torch.Size([1, 320, 7, 7])
-        pool_s2 = self.feature_pool(feature_s2)
+        feature_s2 = self.b2f(resized_s1)  # torch.Size([1, 320, 7, 7])
+        #pool_s2 = self.feature_pool(feature_s2)
         _attention_s2 = self.apn2(feature_s2.view(-1, 320 * 7 * 7))
         attention_s2 = _attention_s2*rescale_tl
         resized_s2 = self.crop_resize(resized_s1, attention_s2 * resized_s1.shape[-1])
         # forward @scale-3
-        feature_s3 = self.b3.features[:-1](resized_s2)
-        pool_s3 = self.feature_pool(feature_s3)
+        feature_s3 = self.b3f(resized_s2)
+        #pool_s3 = self.feature_pool(feature_s3)
         
-        pred1 = self.classifier1(pool_s1.view(-1, 320))
-        pred2 = self.classifier2(pool_s2.view(-1, 320))
-        pred3 = self.classifier3(pool_s3.view(-1, 320))
+        pred1 = self.classifier1(feature_s1)
+        pred2 = self.classifier2(feature_s2)
+        pred3 = self.classifier3(feature_s3)
         '''
         pred1 = self.b1(x)
         pred2 = self.b2(resized_s1)

@@ -70,14 +70,19 @@ def run(pretrained_model):
 
     # ognuna delle 3 cnn del modello parte con i valori della cnn pre addestrata e poi ognuna si specializza
     # con i propri parametri
-    #cls_params = list(net.b1.parameters()) + list(net.b2.parameters()) + list(net.b3.parameters())
-    cls_params = list(net.b1.parameters()) + list(net.b2.parameters()) + list(net.b3.parameters())
+    cls1_params = list(net.bf1.parameters())+ list(net.classifier1.parameters())
+    cls2_params = list(net.bf2.parameters())+ list(net.classifier2.parameters())
+    cls3_params = list(net.bf3.parameters())+ list(net.classifier3.parameters())
     apn_params =  list(net.apn1.parameters()) + list(net.apn2.parameters())
     
     def count_parameters(model):
         return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
-    cls_opt = optim.SGD(cls_params, lr=0.002)
+    cls_opt = [ 
+        optim.SGD(cls1_params, lr=0.001),
+        optim.SGD(cls2_params, lr=0.001),
+        optim.SGD(cls3_params, lr=0.001),
+        ]
     # TODO da modificare in lr=1e-6
     apn_opt = optim.SGD(apn_params, lr=1e-6)
 
@@ -113,8 +118,8 @@ def run(pretrained_model):
             accuracy = temp_accuracy
             torch.save(net.state_dict(), f'build/racnn_efficientNetB0.pt')
             log(f' :: Saved model dict as:\tbuild/racnn_efficientNetB0.pt')
-            torch.save(cls_opt.state_dict(), f'build/cls_optimizer.pt')
-            torch.save(apn_opt.state_dict(), f'build/apn_optimizer.pt')
+            #torch.save(cls_opt.state_dict(), f'build/cls_optimizer.pt')
+            #torch.save(apn_opt.state_dict(), f'build/apn_optimizer.pt')
 
         # save outputs to csv files
         saveFieldToFile(cls_loss, f'logs/racnn-cls-loss.csv')

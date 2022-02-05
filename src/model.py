@@ -104,13 +104,36 @@ class RACNN(nn.Module):
         self.b2.load_state_dict(state_dict)
         self.b3.load_state_dict(state_dict)
 
-        for param in self.b1.features[:-1].parameters():
-            param.requires_grad = False
-        for param in self.b2.features[:-1].parameters():
-            param.requires_grad = False
-        for param in self.b3.features[:-1].parameters():
-            param.requires_grad = False
+        self.bf1 = self.b1.features[:-1]
+        self.bf2 = self.b2.features[:-1]
+        self.bf3 = self.b3.features[:-1]
 
+        self.classifier1 = nn.Sequential(
+            self.b1.features[8],
+            self.b1.avgpool,
+            nn.Flatten(),
+            self.b1.classifier
+        )
+        self.classifier2 = nn.Sequential(
+            self.b2.features[8],
+            self.b2.avgpool,
+            nn.Flatten(),
+            self.b2.classifier
+        )
+        self.classifier3 = nn.Sequential(
+            self.b3.features[8],
+            self.b3.avgpool,
+            nn.Flatten(),
+            self.b3.classifier
+        )
+        '''
+        for param in self.bf1.parameters():
+            param.requires_grad = False
+        for param in self.bf2.parameters():
+            param.requires_grad = False
+        for param in self.bf3.parameters():
+            param.requires_grad = False
+        '''
         self.crop_resize = AttentionCropLayer()
 
         #l'output delle due apn sono 3 valori, che indicano x,y,l
@@ -134,36 +157,24 @@ class RACNN(nn.Module):
         rescale_tl = torch.tensor([1, 1, 0.5], requires_grad=False).cuda()
 
         # forward @scale-1
-        feature_s1 = self.b1.features[:-1](x)  # torch.Size([1, 320, 7, 7])
-        pred1 = self.b1.classifier(
-            self.b1.avgpool(
-                self.b1.features[8](feature_s1)
-            ).view(-1, 1280)
-        )
+        feature_s1 = self.bf1(x)  # torch.Size([1, 320, 7, 7])
+        pred1 = self.classifier1(feature_s1)
 
         _attention_s1 = self.apn1(feature_s1.view(-1, 320 * 7 * 7))
         attention_s1 = _attention_s1*rescale_tl
         resized_s1 = self.crop_resize(x, attention_s1 * x.shape[-1])
 
         # forward @scale-2
-        feature_s2 = self.b2.features[:-1](resized_s1)  # torch.Size([1, 320, 7, 7])
-        pred2 = self.b2.classifier(
-            self.b2.avgpool(
-                self.b2.features[8](feature_s2)
-            ).view(-1, 1280)
-        )
+        feature_s2 = self.bf2(resized_s1)  # torch.Size([1, 320, 7, 7])
+        pred2 = self.classifier2(feature_s2)
 
         _attention_s2 = self.apn2(feature_s2.view(-1, 320 * 7 * 7))
         attention_s2 = _attention_s2*rescale_tl
         resized_s2 = self.crop_resize(resized_s1, attention_s2 * resized_s1.shape[-1])
         
         # forward @scale-3
-        feature_s3 = self.b3.features[:-1](resized_s2)
-        pred3 = self.b3.classifier(
-            self.b3.avgpool(
-                self.b3.features[8](feature_s2)
-            ).view(-1, 1280)
-        )
+        feature_s3 = self.bf3(resized_s2)
+        pred3 = self.classifier3(feature_s3)
         
         return [pred1, pred2, pred3], [feature_s1, feature_s2], [attention_s1, attention_s2], [resized_s1, resized_s2]
 
@@ -200,11 +211,10 @@ class RACNN(nn.Module):
     @staticmethod
     def multitask_loss(logits, targets):
         loss = []
-        criterion = torch.nn.BCEWithLogitsLoss()
-        for i in range(len(logits)):
-            loss.append(criterion(logits[i], targets))
-        loss = torch.sum(torch.stack(loss))
-        return loss
+        criterion1 = torch.nn.BCEWithLogitsLoss()
+        criterion2 = torch.nn.BCEWithLogitsLoss()
+        criterion3 = torch.nn.BCEWithLogitsLoss()
+        return criterion1(logits[0], targets), criterion2(logits[1], targets), criterion3(logits[2], targets)
 
     @staticmethod
     def rank_loss(logits, targets, margin=0.05):
@@ -226,16 +236,26 @@ class RACNN(nn.Module):
         losses = torch.sum(losses)
         return losses
     
-    def __echo_backbone(self, inputs, targets, optimizer):
+    def __echo_backbone(self, inputs, targets, optimizers):
         inputs, targets = Variable(inputs).cuda(), Variable(targets).cuda()
         logits, _, _, _ = self.forward(inputs)
-        optimizer.zero_grad()
-        # logit --> the vector of raw (non-normalized) predictions that a classification model generates
-        loss = self.multitask_loss(logits, targets)
-        loss.backward()
-        optimizer.step()
+        optim1, optim2, optim3 = optimizers
+        loss1, loss2, loss3 = self.multitask_loss(logits, targets)
+        
+        optim3.zero_grad()
+        loss3.backward(retain_graph=True)
+        optim3.step()
+
+        optim2.zero_grad()
+        loss2.backward(retain_graph=True)
+        optim2.step()
+
+        optim1.zero_grad()
+        loss1.backward()
+        optim1.step()
+
         #nb returning loss.item() is important to not saturate gpu memory!!!
-        return loss.item()
+        return loss1.item()+loss2.item()+loss3.item()
 
     def __echo_apn(self, inputs, targets, optimizer):
         inputs, targets = Variable(inputs).cuda(), Variable(targets).cuda()

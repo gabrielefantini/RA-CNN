@@ -70,8 +70,8 @@ def run(pretrained_model):
 
     # ognuna delle 3 cnn del modello parte con i valori della cnn pre addestrata e poi ognuna si specializza
     # con i propri parametri
-    cls_params = list(net.b1f.parameters()) + list(net.b2f.parameters()) + list(net.b3f.parameters())\
-                + list(net.classifier1.parameters()) + list(net.classifier2.parameters()) + list(net.classifier3.parameters())
+    #cls_params = list(net.b1.parameters()) + list(net.b2.parameters()) + list(net.b3.parameters())
+    cls_params = list(net.b1.parameters()) + list(net.b2.parameters()) + list(net.b3.parameters())
     apn_params =  list(net.apn1.parameters()) + list(net.apn2.parameters())
     
     def count_parameters(model):

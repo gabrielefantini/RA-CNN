@@ -98,8 +98,14 @@ class RACNN(nn.Module):
         self.b1 = torchvision.models.efficientnet_b0(num_classes=num_classes)
         self.b2 = torchvision.models.efficientnet_b0(num_classes=num_classes)
         self.b3 = torchvision.models.efficientnet_b0(num_classes=num_classes)
-        
+                
         state_dict = torch.load('build/efficientNet_b0_ImageNet.pt').state_dict()
+        state_dict.pop('classifier.1.weight')
+        state_dict.pop('classifier.1.bias')
+        eff = torchvision.models.efficientnet_b0(num_classes=6).cuda()
+        state_dict['classifier.1.weight'] = eff.state_dict()['classifier.1.weight']
+        state_dict['classifier.1.bias'] = eff.state_dict()['classifier.1.bias']
+
         self.b1.load_state_dict(state_dict)
         self.b2.load_state_dict(state_dict)
         self.b3.load_state_dict(state_dict)
@@ -215,26 +221,14 @@ class RACNN(nn.Module):
         criterion2 = torch.nn.BCEWithLogitsLoss()
         criterion3 = torch.nn.BCEWithLogitsLoss()
         return criterion1(logits[0], targets), criterion2(logits[1], targets), criterion3(logits[2], targets)
-
+    
     @staticmethod
     def rank_loss(logits, targets, margin=0.05):
-        #In the paper said softmax? But innapropriate for multiLabel classification, changed to sigmoid
         preds = [torch.sigmoid(x) for x in logits] # preds length equal to 3
-        losses = []
-        criterion = torch.nn.MarginRankingLoss(margin=0.05)
-        for pred in preds:
-            loss = []
-            for i in range(len(pred)-1):
-                #the loss is the diff between cnn predictions
-                #rank_loss = (pred[i]-pred[i+1] + margin).clamp(min = 0)
-                y = torch.tensor([-1]).cuda()
-                rank_loss = criterion(pred[i], pred[i+1], y)
-                loss.append(rank_loss)
-            loss = torch.sum(torch.stack(loss))
-            losses.append(loss)
-        losses = torch.stack(losses)
-        losses = torch.sum(losses)
-        return losses
+        criterion1 = torch.nn.MarginRankingLoss(margin=0.05, reduction='sum')
+        criterion2 = torch.nn.MarginRankingLoss(margin=0.05, reduction='sum')
+        y = torch.tensor([-1]).cuda()
+        return criterion1(preds[0], preds[1], y), criterion2(preds[1], preds[2], y)
     
     def __echo_backbone(self, inputs, targets, optimizers):
         inputs, targets = Variable(inputs).cuda(), Variable(targets).cuda()
@@ -257,14 +251,21 @@ class RACNN(nn.Module):
         #nb returning loss.item() is important to not saturate gpu memory!!!
         return loss1.item()+loss2.item()+loss3.item()
 
-    def __echo_apn(self, inputs, targets, optimizer):
+    def __echo_apn(self, inputs, targets, optimizers):
         inputs, targets = Variable(inputs).cuda(), Variable(targets).cuda()
         logits, _, _, _ = self.forward(inputs)
-        optimizer.zero_grad()
-        loss = self.rank_loss(logits, targets)
-        loss.backward()
-        optimizer.step()
-        return loss.item()
+        optim1, optim2 = optimizers
+        loss1, loss2 = self.rank_loss(logits, targets)
+        
+        optim2.zero_grad()
+        loss2.backward(retain_graph=True)
+        optim2.step()
+
+        optim1.zero_grad()
+        loss1.backward()
+        optim1.step()
+
+        return loss1.item()+loss2.item()
 
     def mode(self, mode_type):
         assert mode_type in ['pretrain_apn', 'apn', 'backbone']

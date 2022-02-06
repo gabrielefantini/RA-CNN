@@ -73,24 +73,28 @@ def run(pretrained_model):
     cls1_params = list(net.bf1.parameters())+ list(net.classifier1.parameters())
     cls2_params = list(net.bf2.parameters())+ list(net.classifier2.parameters())
     cls3_params = list(net.bf3.parameters())+ list(net.classifier3.parameters())
-    apn_params =  list(net.apn1.parameters()) + list(net.apn2.parameters())
+    apn1_params = list(net.apn1.parameters())
+    apn2_params = list(net.apn2.parameters())
     
     def count_parameters(model):
         return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
     cls_opt = [ 
-        optim.SGD(cls1_params, lr=0.001),
-        optim.SGD(cls2_params, lr=0.001),
-        optim.SGD(cls3_params, lr=0.001),
+        optim.SGD(cls1_params, lr=0.002),
+        optim.SGD(cls2_params, lr=0.002),
+        optim.SGD(cls3_params, lr=0.002),
         ]
     # TODO da modificare in lr=1e-6
-    apn_opt = optim.SGD(apn_params, lr=1e-6)
+    apn_opt = [
+        optim.SGD(apn1_params, lr=1e-6),
+        optim.SGD(apn2_params, lr=1e-6),
+        ]
 
     data_set = get_plant_loader()
     trainloader = torch.utils.data.DataLoader(
-        data_set["train"], batch_size=16, shuffle=True)
+        data_set["train"], batch_size=12, shuffle=True)
     validationloader = torch.utils.data.DataLoader(
-        data_set["validation"], batch_size=16, shuffle=False)
+        data_set["validation"], batch_size=8, shuffle=False)
     sample = random_sample(validationloader)
 
     # 15

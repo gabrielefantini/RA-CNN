@@ -11,11 +11,13 @@ import torch.backends.cudnn as cudnn
 import torch.nn.functional as F
 from torch.autograd import Variable
 import numpy as np
+from torch.utils.tensorboard import SummaryWriter
 
 sys.path.append('.')  # noqa: E402
 from model import RACNN
 from plant_loader import get_plant_loader
 from pretrain_apn import random_sample, log, clean, save_img, build_gif
+
 
 def avg(x): return sum(x)/len(x)
 
@@ -61,7 +63,7 @@ def test(net, dataloader):
     return avg_accuracy/3, correct
 
 
-def run(pretrained_model):
+def run(pretrained_model, runPath='runs/exp1'):
     accuracy = 0
     log(f' :: Start training with {pretrained_model}')
     net = RACNN(num_classes=6).cuda()
@@ -70,25 +72,28 @@ def run(pretrained_model):
 
     # ognuna delle 3 cnn del modello parte con i valori della cnn pre addestrata e poi ognuna si specializza
     # con i propri parametri
-    cls1_params = list(net.bf1.parameters())+ list(net.classifier1.parameters())
-    cls2_params = list(net.bf2.parameters())+ list(net.classifier2.parameters())
-    cls3_params = list(net.bf3.parameters())+ list(net.classifier3.parameters())
+    cls1_params = list(net.bf1.parameters()) + \
+        list(net.classifier1.parameters())
+    cls2_params = list(net.bf2.parameters()) + \
+        list(net.classifier2.parameters())
+    cls3_params = list(net.bf3.parameters()) + \
+        list(net.classifier3.parameters())
     apn1_params = list(net.apn1.parameters())
     apn2_params = list(net.apn2.parameters())
-    
+
     def count_parameters(model):
         return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
-    cls_opt = [ 
+    cls_opt = [
         optim.SGD(cls1_params, lr=0.002),
         optim.SGD(cls2_params, lr=0.002),
         optim.SGD(cls3_params, lr=0.002),
-        ]
+    ]
     # TODO da modificare in lr=1e-6
     apn_opt = [
         optim.SGD(apn1_params, lr=1e-6),
         optim.SGD(apn2_params, lr=1e-6),
-        ]
+    ]
 
     data_set = get_plant_loader()
     trainloader = torch.utils.data.DataLoader(
@@ -97,19 +102,56 @@ def run(pretrained_model):
         data_set["validation"], batch_size=8, shuffle=False)
     sample = random_sample(validationloader)
 
+    n_train_steps = len(trainloader)
+    n_valid_steps = len(validationloader)
+    # print(n_train_steps, n_valid_steps)
+
+    # print(cls_opt[0].state_dict())
+    # sys.exit()
+
+    writer = SummaryWriter(runPath)
+
+    it = iter(validationloader)
+    images, labels = it.next()
+    writer.add_graph(net, images.cuda())
+    writer.close()
+
     # 15
     for epoch in range(40):
-        
+
         cls_loss = train(net, trainloader, cls_opt, epoch, 'backbone')
-        rank_loss = train(net, trainloader, apn_opt, epoch, 'apn')
+        # save to tensorboard
+        writer.add_scalar('racnn cls loss', cls_loss, epoch*n_train_steps)
 
         log(' :: Testing on validation set ...')
         temp_accuracy, valid_corrects = test(net, validationloader)
+        # save to tensorboard
+        writer.add_scalar('racnn validation accuracy',
+                          temp_accuracy, epoch*n_valid_steps)
+        writer.add_scalar('racnn cls1 validation accuracy',
+                          valid_corrects[0], epoch*n_valid_steps)
+        writer.add_scalar('racnn cls2 validation accuracy',
+                          valid_corrects[1], epoch*n_valid_steps)
+        writer.add_scalar('racnn cls3 validation accuracy',
+                          valid_corrects[2], epoch*n_valid_steps)
 
         print("validation accuracies:", valid_corrects)
 
         log(' :: Testing on training set ...')
         train_accuracy, train_corrects = test(net, trainloader)
+        # save to tensorboard
+        writer.add_scalar('racnn training accuracy',
+                          train_accuracy, epoch*n_train_steps)
+        writer.add_scalar('racnn cls1 training accuracy',
+                          train_corrects[0], epoch*n_train_steps)
+        writer.add_scalar('racnn cls2 training accuracy',
+                          train_corrects[1], epoch*n_train_steps)
+        writer.add_scalar('racnn cls3 training accuracy',
+                          train_corrects[2], epoch*n_train_steps)
+
+        rank_loss = train(net, trainloader, apn_opt, epoch, 'apn')
+        # save to tensorboard
+        writer.add_scalar('racnn rank loss', rank_loss, epoch*n_train_steps)
 
         # visualize cropped inputs
         _, _, _, resized = net(sample.unsqueeze(0))
@@ -117,7 +159,6 @@ def run(pretrained_model):
         save_img(x1, path=f'build/.cache/epoch_{epoch}@2x.jpg')
         save_img(x2, path=f'build/.cache/epoch_{epoch}@4x.jpg')
 
-        
         if temp_accuracy > accuracy:
             accuracy = temp_accuracy
             torch.save(net.state_dict(), f'build/racnn_efficientNetB0.pt')
@@ -125,45 +166,14 @@ def run(pretrained_model):
             #torch.save(cls_opt.state_dict(), f'build/cls_optimizer.pt')
             #torch.save(apn_opt.state_dict(), f'build/apn_optimizer.pt')
 
-        # save outputs to csv files
-        saveFieldToFile(cls_loss, f'logs/racnn-cls-loss.csv')
-        saveFieldToFile(rank_loss, f'logs/racnn-rank-loss.csv')
-        saveFieldToFile(temp_accuracy, f'logs/racnn-validation-accuracy.csv')
-        saveFieldToFile(
-            valid_corrects[0], f'logs/racnn-cls1-validation-accuracy.csv')
-        saveFieldToFile(
-            valid_corrects[1], f'logs/racnn-cls2-validation-accuracy.csv')
-        saveFieldToFile(
-            valid_corrects[2], f'logs/racnn-cls3-validation-accuracy.csv')
-        saveFieldToFile(train_accuracy, f'logs/racnn-training-accuracy.csv')
-        saveFieldToFile(train_corrects[0],
-                        f'logs/racnn-cls1-training-accuracy.csv')
-        saveFieldToFile(train_corrects[1],
-                        f'logs/racnn-cls2-training-accuracy.csv')
-        saveFieldToFile(train_corrects[2],
-                        f'logs/racnn-cls3-training-accuracy.csv')
-
-
-def saveFieldToFile(newfield, filename):
-    with open(filename, 'a') as f:
-        np.savetxt(f, [newfield], '%.10f', ',')
-
-
-def cleanlog():
-    path = 'logs'
-    if os.path.exists(path):
-        shutil.rmtree(path)
-    os.makedirs(path)
-
 
 if __name__ == "__main__":
     clean()
+    path = 'runs'
+    if not os.path.exists(path):
+        os.makedirs(path)
     os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-    cleanlog()  # dato che ora viene fatto append dei file, se non li elimini dopo ogni run accumula dati
-    # path = 'logs'
-    # if not os.path.exists(path):
-    #     os.makedirs(path)
     # RACNN con backbone e apn pre addestrate
-    run(pretrained_model='build/racnn_pretrained.pt')
+    run(pretrained_model='build/racnn_pretrained.pt', runPath=f'{path}/exp1')
     build_gif(pattern='@2x', gif_name='racnn_efficientNet')
     build_gif(pattern='@4x', gif_name='racnn_efficientNet')

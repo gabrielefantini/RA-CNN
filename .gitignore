@@ -1,6 +1,7 @@
 /build
 /data
 /plant-pathology-2021-fgvc8.zip
+<<<<<<< HEAD
 src/__pycache__/forge.cpython-39.pyc
 src/__pycache__/model.cpython-39.pyc
 src/__pycache__/plant_loader.cpython-39.pyc
@@ -249,3 +250,6 @@ src/__pycache__/pretrain_apn.cpython-39.pyc
 src/__pycache__/model.cpython-39.pyc
 src/__pycache__/plant_loader.cpython-39.pyc
 src/__pycache__/pretrain_apn.cpython-39.pyc
+=======
+/runs
+>>>>>>> 5a4532525d820ac1babcd26599331ede2dacf30d

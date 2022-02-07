@@ -1,0 +1,18 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "tensorboard",
+            "type": "shell",
+            "command": "tensorboard --logdir=${input:path}"
+        }
+    ],
+    "inputs": [
+        {
+            "id": "path",
+            "type": "promptString",
+            "description": "Select log directory.",
+            "default": "runs"
+        }
+    ]
+}

@@ -47,7 +47,7 @@ def run(pretrained_backbone):
     cudnn.benchmark = True
 
     params = list(net.apn1.parameters()) + list(net.apn2.parameters())
-    optimizer = optim.SGD(params, lr=0.001, momentum=0.9)
+    optimizer = optim.SGD(params, lr=0.001)
 
     data_set = get_plant_loader()
     trainloader = torch.utils.data.DataLoader(data_set["train"], batch_size=8, shuffle=True)
@@ -66,16 +66,16 @@ def run(pretrained_backbone):
             avg_loss = avg(losses[-5 if len(losses) > 5 else -len(losses):])
             print(f':: loss @step{step:2d}: {loss}\tavg_loss_5: {avg_loss}')
 
-            if step % 2 == 0 or step < 5:  # check point
+            if step % 100 == 0 :  # check point
                 _, _, _, resized = net(sample.unsqueeze(0))
                 x1, x2 = resized[0].data, resized[1].data
                 # visualize cropped inputs
                 save_img(x1, path=f'build/.cache/step_{step}@2x.jpg', annotation=f'loss = {avg_loss:.7f}, step = {step}')
                 save_img(x2, path=f'build/.cache/step_{step}@4x.jpg', annotation=f'loss = {avg_loss:.7f}, step = {step}')
-            print(step)
-            if step >= 150:  # 128 steps is enough for pretraining
-                torch.save(net.state_dict(), f'build/racnn_pretrained.pt')
-                return
+                print(step)
+            
+    torch.save(net.state_dict(), f'build/racnn_pretrained.pt')
+    return
 
 
 def build_gif(pattern='@2x', gif_name='pretrain_apn_EfficientNet', cache_path='build/.cache'):

@@ -85,11 +85,10 @@ def run(pretrained_model, runPath='runs/exp1'):
         return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
     cls_opt = [
-        optim.SGD(cls1_params, lr=0.002),
-        optim.SGD(cls2_params, lr=0.002),
-        optim.SGD(cls3_params, lr=0.002),
+        optim.SGD(cls1_params, lr=0.001, momentum=0.9),
+        optim.SGD(cls2_params, lr=0.001, momentum=0.9),
+        optim.SGD(cls3_params, lr=0.001, momentum=0.9),
     ]
-    # TODO da modificare in lr=1e-6
     apn_opt = [
         optim.SGD(apn1_params, lr=1e-6),
         optim.SGD(apn2_params, lr=1e-6),
@@ -97,7 +96,7 @@ def run(pretrained_model, runPath='runs/exp1'):
 
     data_set = get_plant_loader()
     trainloader = torch.utils.data.DataLoader(
-        data_set["train"], batch_size=12, shuffle=True)
+        data_set["train"], batch_size=10, shuffle=True)
     validationloader = torch.utils.data.DataLoader(
         data_set["validation"], batch_size=8, shuffle=False)
     sample = random_sample(validationloader)

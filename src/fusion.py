@@ -15,52 +15,44 @@ class FusionCLS(nn.Module):
         super(FusionCLS, self).__init__()
         self.RACNN = RACNN(num_classes=num_classes).cuda()
         self.scale_1_2 = nn.Sequential(
-            nn.Linear(320*7*7*2, num_classes),
+            nn.Flatten(),
+            nn.Linear(6*2, num_classes),
             nn.Sigmoid(),
         )
         self.scale_1_2_3 = nn.Sequential(
-            nn.Linear(320*7*7*3, num_classes),
+            nn.Flatten(),
+            nn.Linear(6*3, num_classes),
             nn.Sigmoid(),
         )
 
     def forward(self, x):
-        _, features, _, _ = self.RACNN(x)
-        features_1_2 = torch.stack([
-                features[0].view(-1, 320* 7*7),
-                features[1].view(-1, 320* 7*7),
-            ], dim=1)
-        features_1_2_3 = torch.stack([
-                features[0].view(-1, 320* 7*7),
-                features[1].view(-1, 320* 7*7),
-                features[2].view(-1, 320* 7*7),
-            ], dim=1)    
-        ret1 = self.scale_1_2(features_1_2)
-        ret2 = self.scale_1_2_3(features_1_2_3)
-        print(ret1)
+        logits, _, _, _ = self.RACNN(x)
+        ret1 = self.scale_1_2([logits[0], logits[1]])
+        ret2 = self.scale_1_2_3(logits)
         return ret1, ret2
     
     @staticmethod
     def task_loss(logits, targets):
-        loss = []
-        criterion = torch.nn.BCELoss()
-        for i in range(len(logits)):
-            loss.append(criterion(logits[i], targets))
-        loss = torch.sum(torch.stack(loss))
-        return loss
+        criterion1 = torch.nn.BCELoss()
+        criterion2 = torch.nn.BCELoss()
+        return criterion1(logits[0], targets), criterion2(logits[1], targets)
 
     def __echo_backbone(self, inputs, targets, optimizer_1_2, optimizer_1_2_3):
         inputs, targets = Variable(inputs).cuda(), Variable(targets).cuda()
-        scale_1_2, scale_1_2_3 = self.forward(inputs)
+        out = self.forward(inputs)
         optimizer_1_2.zero_grad()
         optimizer_1_2_3.zero_grad()
-        # logit --> the vector of raw (non-normalized) predictions that a classification model generates
-        loss_1_2 = self.task_loss(scale_1_2, targets)
-        loss_1_2_3 = self.task_loss(scale_1_2_3, targets)
+        
+        loss_1_2, loss_1_2_3 = self.task_loss(out, targets)
+
+        optimizer_1_2.zero_grad()
         loss_1_2.backward()
-        loss_1_2_3.backward()
         optimizer_1_2.step()
+        
+        optimizer_1_2_3.zero_grad()
+        loss_1_2_3.backward()
         optimizer_1_2_3.step()
-        #nb returning loss.item() is important to not saturate gpu memory!!!
+        
         return loss_1_2.item(), loss_1_2_3.item()
 
     def load_state(self, pretrained_model):
@@ -136,9 +128,4 @@ def run(pretrained_model):
 if __name__ == "__main__":
     clean()
     os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-    cleanlog()  # dato che ora viene fatto append dei file, se non li elimini dopo ogni run accumula dati
-    # path = 'logs'
-    # if not os.path.exists(path):
-    #     os.makedirs(path)
-    # RACNN con backbone e apn pre addestrate
     run(pretrained_model='build/racnn_efficientNetB0.pt')

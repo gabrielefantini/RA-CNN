@@ -5,6 +5,32 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 import torchvision
 
+def unravel_index(
+        indices: torch.LongTensor,
+        shape: tuple[int, ...],
+    ) -> torch.LongTensor:
+        r"""Converts flat indices into unraveled coordinates in a target shape.
+
+        This is a `torch` implementation of `numpy.unravel_index`.
+
+        Args:
+            indices: A tensor of indices, (*, N).
+            shape: The targeted shape, (D,).
+
+        Returns:
+            unravel coordinates, (*, N, D).
+        """
+
+        shape = torch.tensor(shape)
+        indices = indices % shape.prod()  # prevent out-of-bounds indices
+
+        coord = torch.zeros(indices.size() + shape.size(), dtype=int)
+
+        for i, dim in enumerate(reversed(shape)):
+            coord[..., i] = indices % dim
+            indices = indices // dim
+
+        return coord.flip(-1)
 
 class AttentionCropFunction(torch.autograd.Function):
     @staticmethod
@@ -18,11 +44,12 @@ class AttentionCropFunction(torch.autograd.Function):
         
         ret = []
         for i in range(inputs.size(0)):
-            tx = 112 + int(apn_out[i][0] * 56 + 0.5)
-            ty = 112 + int(apn_out[i][1] * 56 + 0.5)
+            tx = 112 + int(apn_out[i][0] * 56 )
+            ty = 112 + int(apn_out[i][1] * 56 )
             #tl = 28 + int(apn_out[i][2] * 28 + 0.5)
-            #tl da 38 a 56
-            tl = 38 + int(((apn_out[i][2] + 1) /2 ) * 18)
+            #tl da 38 a 56 (Prova 1) ovvero da 1/3 a 1/2
+            #tl da 45 a 56 (Prova 2) ovvero da 2/5 a 1/2
+            tl = 45 + int(((apn_out[i][2] + 1) /2 ) * 11)
             
             mk = (h(x-tx+tl) - h(x-tx-tl)) * (h(y-ty+tl) - h(y-ty-tl))
             xatt = inputs[i] * mk
@@ -90,11 +117,11 @@ class RACNN(nn.Module):
         self.b3 = torchvision.models.efficientnet_b0(num_classes=num_classes)
                 
         state_dict = torch.load('build/efficientNet_b0_ImageNet.pt').state_dict()
-        state_dict.pop('classifier.1.weight')
-        state_dict.pop('classifier.1.bias')
-        eff = torchvision.models.efficientnet_b0(num_classes=6).cuda()
-        state_dict['classifier.1.weight'] = eff.state_dict()['classifier.1.weight']
-        state_dict['classifier.1.bias'] = eff.state_dict()['classifier.1.bias']
+        #state_dict.pop('classifier.1.weight')
+        #state_dict.pop('classifier.1.bias')
+        #eff = torchvision.models.efficientnet_b0(num_classes=6).cuda()
+        #state_dict['classifier.1.weight'] = eff.state_dict()['classifier.1.weight']
+        #state_dict['classifier.1.bias'] = eff.state_dict()['classifier.1.bias']
 
         self.b1.load_state_dict(state_dict)
         self.b2.load_state_dict(state_dict)
@@ -135,14 +162,14 @@ class RACNN(nn.Module):
         #l'output delle due apn sono 3 valori, che indicano x,y,l
         self.apn1 = nn.Sequential(
             nn.Linear(320 * 7 * 7, 4096),
-            nn.ReLU(),
+            nn.Sigmoid(),
             nn.Linear(4096, 3),
             nn.Tanh()
         )
 
         self.apn2 = nn.Sequential(
             nn.Linear(320 * 7 * 7, 4096),
-            nn.ReLU(),
+            nn.Sigmoid(),
             nn.Linear(4096, 3),
             nn.Tanh()
         )
@@ -169,19 +196,24 @@ class RACNN(nn.Module):
         pred3 = self.classifier3(feature_s3)
         
         return [pred1, pred2, pred3], [feature_s1, feature_s2], [apn_out1, apn_out2], [resized_s1, resized_s2]
-
+        
     def __get_weak_loc(self, features):
-        ret = []   # search regions with the highest response value in conv5
+        ret = []   # search regions with the highest response value
         for i in range(len(features)):
-            resize = 224 if i >= 1 else 224
-            response_map_batch = F.interpolate(features[i], size=[resize, resize], mode="bilinear").mean(1)  # mean alone channels
+            #features[i].size() == [nbatch, 320, 7, 7]
+            #Upscala il 7x7 a 224x224 e poi fa la media tra i canali
+            response_map_batch = F.interpolate(features[i], size=[224, 224], mode="bilinear").amax(1)
+            #response_map_batch.size() == [nbatch, 224, 224]
             ret_batch = []
             for response_map in response_map_batch:
-                argmax_idx = response_map.argmax()
-                ty = (argmax_idx % resize)
-                argmax_idx = (argmax_idx - ty)/resize
-                tx = (argmax_idx % resize)
-                ret_batch.append([(tx*1.0/resize).clamp(min=0.25, max=0.75), (ty*1.0/resize).clamp(min=0.25, max=0.75), 0.25])  # tl = 0.25, fixed
+                #response_map.size() = [224,224]
+                tx, ty = unravel_index(response_map.argmax(), response_map.shape)
+                #tx, ty possono andare da 56 a 168, tl fissato a 56
+                tx.clamp(min=56, max=168)
+                ty.clamp(min=56, max=168)
+                tx = (tx - 112)/56
+                ty = (ty - 112)/56
+                ret_batch.append([tx, ty, 1])
             ret.append(torch.Tensor(ret_batch))
         return ret
 

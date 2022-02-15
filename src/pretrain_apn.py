@@ -73,7 +73,9 @@ def run(pretrained_backbone):
                 save_img(x1, path=f'build/.cache/step_{step}@2x.jpg', annotation=f'loss = {avg_loss:.7f}, step = {step}')
                 save_img(x2, path=f'build/.cache/step_{step}@4x.jpg', annotation=f'loss = {avg_loss:.7f}, step = {step}')
                 print(step)
-            
+            if step == 400:
+                torch.save(net.state_dict(), f'build/racnn_pretrained.pt')
+                return
     torch.save(net.state_dict(), f'build/racnn_pretrained.pt')
     return
 

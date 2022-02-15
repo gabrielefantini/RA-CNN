@@ -44,12 +44,13 @@ class AttentionCropFunction(torch.autograd.Function):
         
         ret = []
         for i in range(inputs.size(0)):
-            tx = 112 + int(apn_out[i][0] * 56 )
-            ty = 112 + int(apn_out[i][1] * 56 )
+            tx = 112 + int(apn_out[i][0] * 38 )
+            ty = 112 + int(apn_out[i][1] * 38 )
             #tl = 28 + int(apn_out[i][2] * 28 + 0.5)
             #tl da 38 a 56 (Prova 1) ovvero da 1/3 a 1/2
-            #tl da 45 a 56 (Prova 2) ovvero da 2/5 a 1/2
-            tl = 45 + int(((apn_out[i][2] + 1) /2 ) * 11)
+            #tl da 38 a 56 (Prova 2) ovvero da 1/3 a 1/2
+            #tl da 45 a 74 (Prova 3) ovvero da 2/5 a 2/3
+            tl = 45 + int(((apn_out[i][2] + 1) /2 ) * 29)
             
             mk = (h(x-tx+tl) - h(x-tx-tl)) * (h(y-ty+tl) - h(y-ty-tl))
             xatt = inputs[i] * mk
@@ -75,9 +76,9 @@ class AttentionCropFunction(torch.autograd.Function):
         
         x = torch.stack([torch.arange(0, 224)] * 224).t()
         y = x.t()
-        mx = (x >= 168).float() - (x < 56).float()
-        my = (y >= 168).float() - (y < 56).float()
-        ml = (((x<56)+(x>=168)+(y<56)+(y>=168)) > 0).float()*2 - 1
+        mx = (x >= 150).float() - (x < 74).float()
+        my = (y >= 150).float() - (y < 74).float()
+        ml = (((x<74)+(x>=150)+(y<74)+(y>=150)) > 0).float()*2 - 1
         
         mx_batch = torch.stack([mx.float()] * grad_output.size(0))
         my_batch = torch.stack([my.float()] * grad_output.size(0))

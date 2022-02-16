@@ -15,18 +15,18 @@ class FusionCLS(nn.Module):
     def __init__(self, num_classes):
         super(FusionCLS, self).__init__()
         self.RACNN = RACNN(num_classes=num_classes).cuda()
+        
+        self.RACNN.eval()
 
         for parameters in self.RACNN.parameters():
             parameters.requires_grad = False
 
         self.scale_1_2 = nn.Sequential(
-            nn.Sigmoid(),
             nn.Flatten(),
             nn.Linear(6*2, num_classes),
             nn.Sigmoid(),
         )
         self.scale_1_2_3 = nn.Sequential(
-            nn.Sigmoid(),
             nn.Flatten(),
             nn.Linear(6*3, num_classes),
             nn.Sigmoid(),

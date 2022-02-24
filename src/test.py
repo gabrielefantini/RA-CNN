@@ -2,6 +2,7 @@ import imageio
 import os
 import shutil
 import sys
+import numpy as np
 from scipy.sparse import data
 import torch
 import time
@@ -9,15 +10,16 @@ import torch.optim as optim
 import torch.backends.cudnn as cudnn
 import torch.nn.functional as F
 from torch.autograd import Variable
+from sklearn import metrics
+from fusion import FusionCLS
 
-from torch.utils.tensorboard import SummaryWriter
-writer = SummaryWriter('runs/experiment_1')
 
 sys.path.append('.')  # noqa: E402
 from model import RACNN
 from plant_loader import get_plant_loader
 from pretrain_apn import log, clean, save_img, build_gif
 
+'''
 def random_sample(dataloader):
     for batch_idx, (inputs, labels) in enumerate(dataloader, 1):
         return [inputs[5].cuda(), labels[5].cuda()]
@@ -58,6 +60,7 @@ def runOnSingleImage(pretrained_model):
             if(x.item()==1):
                 print(labels[id])
         print("================================")        
+'''
 
 def run(pretrained_model):
     accuracy = 0
@@ -65,33 +68,20 @@ def run(pretrained_model):
     net.load_state_dict(torch.load(pretrained_model))
     net.eval()
     data_set = get_plant_loader()
-    validationloader = torch.utils.data.DataLoader(data_set["validation"], batch_size=8, shuffle=False)
-
+    validationloader = torch.utils.data.DataLoader(data_set["validation"], batch_size=32, shuffle=False)
+    categories = ["complex", "frog_eye_leaf_spot",
+              "healthy", "powdery_mildew", "rust", "scab"]
     
-    correct_summary = {
-        'clsf-0': {
-            'top-1': 0,
-            },
-        'clsf-1': {
-            'top-1': 0,
-        },
-        'clsf-2': {
-            'top-1': 0,
-            }
-        }
+    total_true= Variable().cuda()
+    preds = {
+    'clsf-0': Variable().cuda(),
+    'clsf-1': Variable().cuda(),
+    'clsf-2': Variable().cuda()
+    }
 
-    inputsNumber = 0
     for step, (inputs, labels) in enumerate(validationloader, 0):
         inputs, labels = Variable(inputs).cuda(), Variable(labels).cuda()
-        
-        if step == 1:
-            dataiter = iter(validationloader)
-            images, labels = dataiter.next()
-            writer.add_graph(net, images.cuda())
-            writer.close()
-
-        inputsNumber += inputs.size(0)    
-        
+        total_true = torch.cat((total_true, labels), dim=0)
         with torch.no_grad():
             outputs, _, _, _ = net(inputs)
             #gli output di ogni livello
@@ -99,17 +89,47 @@ def run(pretrained_model):
                 logits = torch.sigmoid(logits)
                 logits[logits >= 0.5 ] = 1
                 logits[logits < 0.5 ] = 0
-                correct_summary[f'clsf-{idx}']['top-1'] +=  torch.all(torch.eq(logits, labels),  dim=1).sum()  # top-1
+                preds[f'clsf-{idx}'] = torch.cat((preds[f'clsf-{idx}'], logits), dim=0)
                 
-    for clsf in correct_summary.keys():
-        _summary = correct_summary[clsf]
-        for topk in _summary.keys():
-            print(f'\tAccuracy {clsf}@{topk} {_summary[topk]/inputsNumber:.5%}')
-            accuracy +=_summary[topk]/inputsNumber
+    for i in range(3):
+        print(f'Scale number {i}')
+        print(metrics.classification_report(total_true.cpu(), preds[f'clsf-{i}'].cpu(), target_names=categories))
 
-    print(accuracy/3)
+def runFusion(pretrained_model):
+    accuracy = 0
+    net = FusionCLS(num_classes=6).cuda()
+    net.load_state_dict(torch.load(pretrained_model))
+    net.eval()
+    data_set = get_plant_loader()
+    validationloader = torch.utils.data.DataLoader(data_set["validation"], batch_size=32, shuffle=False)
+    categories = ["complex", "frog_eye_leaf_spot",
+              "healthy", "powdery_mildew", "rust", "scab"]
+    
+    total_true= Variable().cuda()
+    preds = {
+    'scale-0': Variable().cuda(),
+    'scale-1': Variable().cuda()
+    }
+
+    for step, (inputs, labels) in enumerate(validationloader, 0):
+        inputs, labels = Variable(inputs).cuda(), Variable(labels).cuda()
+        total_true = torch.cat((total_true, labels), dim=0)
+        with torch.no_grad():
+            outputs= net(inputs)
+            #gli output di ogni livello
+            for idx, logits in enumerate(outputs):
+                logits[logits >= 0.5 ] = 1
+                logits[logits < 0.5 ] = 0
+                preds[f'scale-{idx}'] = torch.cat((preds[f'scale-{idx}'], logits), dim=0)
+
+
+    print('Scale 1_2')
+    print(metrics.classification_report(total_true.cpu(), preds['scale-0'].cpu(), target_names=categories))
+    print('Scale 1_2_3')
+    print(metrics.classification_report(total_true.cpu(), preds['scale-1'].cpu(), target_names=categories))
 
 if __name__ == "__main__":
     os.environ["CUDA_VISIBLE_DEVICES"] = "0"
     #runOnSingleImage('build/racnn_efficientNetB0.pt')
-    run('build//racnn_pretrained.pt')
+    #run('build//racnn_efficientNetB0.pt')
+    runFusion('build//fusion_efficientNetB0.pt')

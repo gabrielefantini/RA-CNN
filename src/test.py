@@ -12,7 +12,7 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 from sklearn import metrics
 from fusion import FusionCLS
-
+import torchvision
 
 sys.path.append('.')  # noqa: E402
 from model import RACNN
@@ -128,8 +128,37 @@ def runFusion(pretrained_model):
     print('Scale 1_2_3')
     print(metrics.classification_report(total_true.cpu(), preds['scale-1'].cpu(), target_names=categories))
 
+def runEfficientNetB0(pretrained_model):
+    accuracy = 0
+    net = torchvision.models.efficientnet_b0(num_classes=6)
+    state_dict = torch.load(pretrained_model).state_dict()
+    net.load_state_dict(state_dict)
+    net.cuda()
+    net.eval()
+    data_set = get_plant_loader()
+    validationloader = torch.utils.data.DataLoader(data_set["validation"], batch_size=32, shuffle=False)
+    categories = ["complex", "frog_eye_leaf_spot",
+              "healthy", "powdery_mildew", "rust", "scab"]
+    
+    total_true= Variable().cuda()
+    preds = Variable().cuda()
+
+    for step, (inputs, labels) in enumerate(validationloader, 0):
+        inputs, labels = Variable(inputs).cuda(), Variable(labels).cuda()
+        total_true = torch.cat((total_true, labels), dim=0)
+        with torch.no_grad():
+            outputs= net(inputs)
+            #gli output di ogni livello
+            outputs = torch.sigmoid(outputs)
+            outputs[outputs >= 0.5 ] = 1
+            outputs[outputs < 0.5 ] = 0
+            preds= torch.cat((preds, outputs), dim=0)
+
+    print(metrics.classification_report(total_true.cpu(), preds.cpu(), target_names=categories))
+
 if __name__ == "__main__":
     os.environ["CUDA_VISIBLE_DEVICES"] = "0"
     #runOnSingleImage('build/racnn_efficientNetB0.pt')
     #run('build//racnn_efficientNetB0.pt')
-    runFusion('build//fusion_efficientNetB0.pt')
+    #runFusion('build//fusion_efficientNetB0.pt')
+    runEfficientNetB0('efficientNetMaxed//efficientNet_b0_ImageNet.pt')

@@ -5,6 +5,7 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 import torchvision
 
+#Utils function
 def unravel_index(
         indices: torch.LongTensor,
         shape: tuple[int, ...],
@@ -160,7 +161,6 @@ class RACNN(nn.Module):
         '''
         self.crop_resize = AttentionCropLayer()
 
-        #l'output delle due apn sono 3 valori, che indicano x,y,l
         self.apn1 = nn.Sequential(
             nn.Linear(320 * 7 * 7, 4096),
             nn.Sigmoid(),
@@ -178,21 +178,27 @@ class RACNN(nn.Module):
         self.echo = None
 
     def forward(self, x):
-        # forward @scale-1
+        #==========================================================
+        #                       Scale_1
+        #==========================================================
         feature_s1 = self.bf1(x)  # torch.Size([1, 320, 7, 7])
         pred1 = self.classifier1(feature_s1)
 
         apn_out1 = self.apn1(feature_s1.view(-1, 320 * 7 * 7))
         resized_s1 = self.crop_resize(apn_out1, x)
 
-        # forward @scale-2
+        #==========================================================
+        #                       Scale_2
+        #==========================================================
         feature_s2 = self.bf2(resized_s1)  # torch.Size([1, 320, 7, 7])
         pred2 = self.classifier2(feature_s2)
 
         apn_out2 = self.apn2(feature_s2.view(-1, 320 * 7 * 7))
         resized_s2 = self.crop_resize(apn_out2, resized_s1)
         
-        # forward @scale-3
+        #==========================================================
+        #                       Scale_3
+        #==========================================================
         feature_s3 = self.bf3(resized_s2)
         pred3 = self.classifier3(feature_s3)
         
@@ -226,11 +232,8 @@ class RACNN(nn.Module):
         weak_loss1 = F.smooth_l1_loss(attens[0], weak_loc[0].cuda())
         weak_loss2 = F.smooth_l1_loss(attens[1], weak_loc[1].cuda())
         loss = weak_loss1 + weak_loss2
-        #calcola il gradiente della loss
         loss.backward()
-        #perform a single optimization step
         optimizer.step()
-        #ritorna la loss come un singolo numero anziche un tensore
         return loss.item()
 
     @staticmethod
@@ -267,7 +270,6 @@ class RACNN(nn.Module):
         loss1.backward()
         optim1.step()
 
-        #nb returning loss.item() is important to not saturate gpu memory!!!
         return loss1.item()+loss2.item()+loss3.item()
 
     def __echo_apn(self, inputs, targets, optimizers):
@@ -297,12 +299,3 @@ class RACNN(nn.Module):
         if mode_type == 'apn':
             self.echo = self.__echo_apn
             self.eval()
-
-
-#if __name__ == "__main__":
-#    net = RACNN(num_classes=6).cuda()
-#    net.mode('pretrain_apn')
-#    optimizer = torch.optim.SGD(list(net.apn1.parameters()) + list(net.apn2.parameters()), lr=0.001, momentum=0.9)
-#    for i in range(50):
-#        inputs = torch.rand(2, 3, 448, 448)
-#        print(f':: loss @step{i} : {net.echo(inputs, optimizer)}')
